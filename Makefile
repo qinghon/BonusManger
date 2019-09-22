@@ -12,18 +12,17 @@ SOC:=$(shell uname -m)
 all: setup build-amd64 build-aarch64 build-arm
 
 setup:
-	mkdir -p build/armv7l
-	mkdir -p build/x86_64
-	mkdir -p build/aarch64
+	mkdir -p build/
+
 
 build-aarch64: setup
-	${BUILD_ENV} GOARCH=arm64 GOOS=linux  go build ${LDFLAGS} -o build/aarch64/${TARGET_EXEC} ${GO_FILE}
+	${BUILD_ENV} GOARCH=arm64 GOOS=linux  go build ${LDFLAGS} -o build/${TARGET_EXEC}_aarch64 ${GO_FILE}
 
 build-arm: setup
-	${BUILD_ENV} GOARCH=arm GOOS=linux go build ${LDFLAGS} -o build/armv7l/${TARGET_EXEC} ${GO_FILE}
+	${BUILD_ENV} GOARCH=arm GOOS=linux go build ${LDFLAGS} -o build/${TARGET_EXEC}_armv7l ${GO_FILE}
 
 build-amd64: setup
-	${BUILD_ENV} GOARCH=amd64 GOOS=linux go build ${LDFLAGS} -o build/x86_64/${TARGET_EXEC} ${GO_FILE}
+	${BUILD_ENV} GOARCH=amd64 GOOS=linux go build ${LDFLAGS} -o build/${TARGET_EXEC}_x86_64 ${GO_FILE}
 
 docker:  docker-aarch64 docker-amd64
 

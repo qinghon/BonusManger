@@ -60,6 +60,8 @@ elif which yum ; then
 fi
 `
 
+
+
 func main() {
 	go onboot()
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
@@ -80,9 +82,21 @@ func main() {
 	e.GET("/net", get_net)
 	e.PATCH("/net", apply_net)
 	e.PUT("/net", set_net)
+	e.GET("/test", func(c *gin.Context) {
+		c.JSON(200,Message{200,"this test api3"})
+	})
+	//s:=&http.Server{
+	//	Addr: ":9018",
+	//	Handler:e,
+	//	//ReadTimeout:    10 * time.Second,
+	//	//WriteTimeout:   10 * time.Second,
+	//	//MaxHeaderBytes: 1 << 20,
+	//}
 	e.Run(":9018")
-}
+	//gracehttp.AddServer(s,false,"","")
+	//gracehttp.Run()
 
+}
 // Transparent 透传至官方客户端
 func tp_discovery(c *gin.Context) {
 	Transparent("127.0.0.1:9017", c)
@@ -167,6 +181,7 @@ func get_net(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
 			fmt.Sprintf("get file content fail: %s", err)})
+		return
 	}
 	cards := get_network_card()
 	c.JSON(http.StatusOK, Net_interfaces{string(by), cards})
@@ -467,3 +482,4 @@ func getip() string {
 	log.Println(strings.Split(conn.LocalAddr().String(), ":")[0])
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
+

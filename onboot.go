@@ -17,7 +17,21 @@ import (
 
 const VersionURLS = "http://192.168.4.2:81/Github/BonusManger/build/md5sum"
 
-const GetClient = "http://192.168.4.2:81/Github/BonusManger/build/x86_64/bonus_manger"
+const GetClient = "http://192.168.4.2:81/Github/BonusManger/build/bonus_manger_%s"
+const Bxc_node_URL="https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
+const Bxc_node_sercice =`
+[Unit]
+Description=bxc node app
+After=network.target
+
+[Service]
+ExecStart=/opt/bcloud/nodeapi/node --alsologtostderr ${DON_SET_DISK} ${INSERT_STR} 
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+`
 
 var ARCH string
 
@@ -25,6 +39,7 @@ func check_version() (string, bool) {
 	resp, err := http.Get(VersionURLS)
 	if err != nil {
 		log.Printf("get version failed: %s", err)
+		return "", false
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -33,17 +48,6 @@ func check_version() (string, bool) {
 	}
 	spl := strings.Split(string(body), "\n")
 	md5sum_local := Getfilemd5(os.Args[0])
-
-	switch runtime.GOARCH {
-	case "amd64":
-		ARCH = "x86_64"
-	case "arm64":
-		ARCH = "aarch64"
-	case "arm":
-		ARCH = "armv7l"
-
-	}
-	//arch:="x86_64"
 	for _, l := range spl {
 		if strings.TrimSpace(l) == "" {
 			continue
@@ -62,20 +66,31 @@ func check_version() (string, bool) {
 		if ! strings.Contains(filename, ARCH) {
 			continue
 		}
+		//log.Println(md5sum, md5sum_local)
 		if md5sum != md5sum_local {
-			//log.Println(md5sum, md5sum_local)
-			return md5sum, false
+
+			return md5sum, true
 		} else {
-			return "", true
+			return "", false
 		}
 		//log.Println(md5sum,filename)
 	}
 	return "", false
 }
+func check_and_update() {
+	md5sum, need_update := check_version()
+	//log.Println(md5sum)
+	if  need_update {
+		log.Printf("we need update,new client md5sum: %s",md5sum)
+		Down_new_client(md5sum)
+	} else {
+		log.Println("don't need update")
+	}
+}
 
 func Down_new_client(md5sum string) {
 	down_path := "/tmp/bouns_manger"
-	err := Download_file(GetClient, down_path)
+	err := Download_file(fmt.Sprintf(GetClient,ARCH), down_path)
 	if err != nil {
 		log.Printf("Download new client fail: %s", err)
 	}
@@ -93,21 +108,32 @@ func Down_new_client(md5sum string) {
 			err = Copyfile_force(os.Args[0], down_path)
 		}
 	}
-	os.Exit(0)
-}
-
-func check_and_update() {
-	md5sum, sure_newversion := check_version()
-	log.Println(md5sum)
-	if ! sure_newversion {
-		log.Println("we need update")
-		Down_new_client(md5sum)
-	} else {
-		log.Println("don't need update")
+	if err:=os.Chmod(os.Args[0],0755);err!=nil {
+		log.Printf("chmod failed %s",down_path)
+		return
 	}
+	log.Println("restarting server...,if this not restart, you should be systemctl start bonus_manger")
+	os.Exit(1)
 }
 
-func check_node() {
+func check_node() (error) {
+	_,err:=http.Get("http://127.0.0.1:9017")
+	if err==nil {
+		log.Println("bxc-node may be is running")
+		return err
+	}
+	err=os.MkdirAll("/opt/bcloud/nodeapi/",0755)
+	if err!=nil {
+		log.Printf("mkdir  /opt/bcloud/nodeapi/ faile",err)
+		return err
+	}
+	Download_file(fmt.Sprintf(Bxc_node_URL,ARCH),"/opt/bcloud/nodeapi/node")
+	ioutil.WriteFile("/lib/systemd/system/bxc-node.service",[]byte(Bxc_node_sercice),0644)
+	if err!=nil {
+		return err
+	}
+	cmd:=exec.Command("sh","-c","systemctl enable bxc-node&&systemctl status bxc-node")
+	return cmd.Wait()
 
 }
 
@@ -158,7 +184,8 @@ func Download_file(_URL, _path string) (error) {
 }
 
 func onboot() {
-
+	go Set_arch()
+	go check_node()
 	timetkm := time.NewTicker(time.Second * 10)
 	for {
 		select {
@@ -169,11 +196,33 @@ func onboot() {
 }
 
 func Copyfile_force(dstName, srcName string) (error) {
-	log.Println("cp", "-f", srcName, dstName)
-	cmd := exec.Command("cp", "-f", srcName, dstName)
-	err := cmd.Start()
-	if err != nil {
+	//log.Println("cp", "-f", srcName, dstName)
+	//cmd := exec.Command("cp", "-f", srcName, dstName)
+	//err := cmd.Start()
+	//if err != nil {
+	//	return err
+	//}
+
+	return Run_command(fmt.Sprintf("cp -f %s %s",srcName,dstName))
+	//return nil
+}
+func Set_arch()  {
+	switch runtime.GOARCH {
+	case "amd64":
+		ARCH = "x86_64"
+	case "arm64":
+		ARCH = "aarch64"
+	case "arm":
+		ARCH = "armv7l"
+	}
+	log.Printf("check device arch is: %s",ARCH)
+}
+
+func Run_command(cmd_str string) error {
+	cmd:=exec.Command("sh","-c",cmd_str)
+	log.Printf("sh -c %s",cmd_str)
+	if err:=cmd.Start();err!=nil {
 		return err
 	}
-	return nil
+	return cmd.Wait()
 }

@@ -2,6 +2,7 @@ version: '3'
 services:
   bonus:
     image: bonusmanger:latest
+    restart: always
     network_mode: bxc1
     cap_add:
       - NET_ADMIN
