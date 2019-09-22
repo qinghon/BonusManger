@@ -1,0 +1,15 @@
+version: '3'
+services:
+  bonus:
+    image: bonusmanger:latest
+    network_mode: bxc1
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/ppp
+      - /dev/net/tun
+
+#    links:
+#    - web
+#    ports:
+#    - 8080:80

@@ -1,0 +1,6 @@
+FROM alpine:latest
+RUN mkdir -p /opt/bcloud/ &&touch /opt/bcloud/node.db &&apk add lvm2 curl wget ppp-pppoe
+COPY build/aarch64/bonus_manger /
+COPY node_aarch64 /node
+COPY start.sh /
+CMD ["sh","/start.sh"]
