@@ -60,8 +60,6 @@ elif which yum ; then
 fi
 `
 
-
-
 func main() {
 	go onboot()
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
@@ -82,9 +80,6 @@ func main() {
 	e.GET("/net", get_net)
 	e.PATCH("/net", apply_net)
 	e.PUT("/net", set_net)
-	e.GET("/test", func(c *gin.Context) {
-		c.JSON(200,Message{200,"this test api3"})
-	})
 	//s:=&http.Server{
 	//	Addr: ":9018",
 	//	Handler:e,
