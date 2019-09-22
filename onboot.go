@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,11 +16,11 @@ import (
 	"time"
 )
 
-const VersionURLS = "http://192.168.4.2:81/Github/BonusManger/build/md5sum"
+const VersionURLS = "https://github.com/qinghon/BonusManger/releases/download/%s/md5sum"
 
-const GetClient = "http://192.168.4.2:81/Github/BonusManger/build/bonus_manger_%s"
-const Bxc_node_URL="https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
-const Bxc_node_sercice =`
+const GetClient = "https://github.com/qinghon/BonusManger/releases/download/%s/bonus_manger_%s"
+const Bxc_node_URL = "https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
+const Bxc_node_sercice = `
 [Unit]
 Description=bxc node app
 After=network.target
@@ -33,10 +34,108 @@ RestartSec=10
 WantedBy=multi-user.target
 `
 
-var ARCH string
+const Github_latest = "https://api.github.com/repos/qinghon/BonusManger/releases/latest"
 
+var ARCH string
+var last_release Release_latest
+
+/*  Auto Generated*/
+type Release_latest struct {
+	URL             string `json:"url"`
+	AssetsURL       string `json:"assets_url"`
+	UploadURL       string `json:"upload_url"`
+	HTMLURL         string `json:"html_url"`
+	ID              int    `json:"id"`
+	NodeID          string `json:"node_id"`
+	TagName         string `json:"tag_name"`
+	TargetCommitish string `json:"target_commitish"`
+	Name            string `json:"name"`
+	Draft           bool   `json:"draft"`
+	Author          struct {
+		Login             string `json:"login"`
+		ID                int    `json:"id"`
+		NodeID            string `json:"node_id"`
+		AvatarURL         string `json:"avatar_url"`
+		GravatarID        string `json:"gravatar_id"`
+		URL               string `json:"url"`
+		HTMLURL           string `json:"html_url"`
+		FollowersURL      string `json:"followers_url"`
+		FollowingURL      string `json:"following_url"`
+		GistsURL          string `json:"gists_url"`
+		StarredURL        string `json:"starred_url"`
+		SubscriptionsURL  string `json:"subscriptions_url"`
+		OrganizationsURL  string `json:"organizations_url"`
+		ReposURL          string `json:"repos_url"`
+		EventsURL         string `json:"events_url"`
+		ReceivedEventsURL string `json:"received_events_url"`
+		Type              string `json:"type"`
+		SiteAdmin         bool   `json:"site_admin"`
+	} `json:"author"`
+	Prerelease  bool      `json:"prerelease"`
+	CreatedAt   time.Time `json:"created_at"`
+	PublishedAt time.Time `json:"published_at"`
+	Assets      []struct {
+		URL      string      `json:"url"`
+		ID       int         `json:"id"`
+		NodeID   string      `json:"node_id"`
+		Name     string      `json:"name"`
+		Label    interface{} `json:"label"`
+		Uploader struct {
+			Login             string `json:"login"`
+			ID                int    `json:"id"`
+			NodeID            string `json:"node_id"`
+			AvatarURL         string `json:"avatar_url"`
+			GravatarID        string `json:"gravatar_id"`
+			URL               string `json:"url"`
+			HTMLURL           string `json:"html_url"`
+			FollowersURL      string `json:"followers_url"`
+			FollowingURL      string `json:"following_url"`
+			GistsURL          string `json:"gists_url"`
+			StarredURL        string `json:"starred_url"`
+			SubscriptionsURL  string `json:"subscriptions_url"`
+			OrganizationsURL  string `json:"organizations_url"`
+			ReposURL          string `json:"repos_url"`
+			EventsURL         string `json:"events_url"`
+			ReceivedEventsURL string `json:"received_events_url"`
+			Type              string `json:"type"`
+			SiteAdmin         bool   `json:"site_admin"`
+		} `json:"uploader"`
+		ContentType        string    `json:"content_type"`
+		State              string    `json:"state"`
+		Size               int       `json:"size"`
+		DownloadCount      int       `json:"download_count"`
+		CreatedAt          time.Time `json:"created_at"`
+		UpdatedAt          time.Time `json:"updated_at"`
+		BrowserDownloadURL string    `json:"browser_download_url"`
+	} `json:"assets"`
+	TarballURL string `json:"tarball_url"`
+	ZipballURL string `json:"zipball_url"`
+	Body       string `json:"body"`
+}
+
+func onboot() {
+	go Set_arch()
+	go check_node()
+	timetkm := time.NewTicker(time.Minute * 10)
+	for {
+		select {
+		case <-timetkm.C:
+			go check_and_update()
+		}
+	}
+}
 func check_version() (string, bool) {
-	resp, err := http.Get(VersionURLS)
+	var err error
+	last_release, err = Get_latest_info()
+	if err != nil {
+		log.Printf("get tag info fail:%s", err)
+		return "", false
+	}
+	if last_release.TagName == "" {
+		log.Println("not found new tag")
+		return "", false
+	}
+	resp, err := http.Get(fmt.Sprintf(VersionURLS, last_release.TagName))
 	if err != nil {
 		log.Printf("get version failed: %s", err)
 		return "", false
@@ -77,11 +176,12 @@ func check_version() (string, bool) {
 	}
 	return "", false
 }
+
 func check_and_update() {
 	md5sum, need_update := check_version()
 	//log.Println(md5sum)
-	if  need_update {
-		log.Printf("we need update,new client md5sum: %s",md5sum)
+	if need_update {
+		log.Printf("we need update to %s,new client md5sum: %s", last_release.TagName, md5sum)
 		Down_new_client(md5sum)
 	} else {
 		log.Println("don't need update")
@@ -90,7 +190,7 @@ func check_and_update() {
 
 func Down_new_client(md5sum string) {
 	down_path := "/tmp/bouns_manger"
-	err := Download_file(fmt.Sprintf(GetClient,ARCH), down_path)
+	err := Download_file(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
 	if err != nil {
 		log.Printf("Download new client fail: %s", err)
 	}
@@ -108,31 +208,31 @@ func Down_new_client(md5sum string) {
 			err = Copyfile_force(os.Args[0], down_path)
 		}
 	}
-	if err:=os.Chmod(os.Args[0],0755);err!=nil {
-		log.Printf("chmod failed %s",down_path)
+	if err := os.Chmod(os.Args[0], 0755); err != nil {
+		log.Printf("chmod failed %s", down_path)
 		return
 	}
-	log.Println("restarting server...,if this not restart, you should be systemctl start bonus_manger")
+	log.Println("restarting server...,if this not restart, you should be run :\nsystemctl start bonus_manger")
 	os.Exit(1)
 }
 
 func check_node() (error) {
-	_,err:=http.Get("http://127.0.0.1:9017")
-	if err==nil {
+	_, err := http.Get("http://127.0.0.1:9017")
+	if err == nil {
 		log.Println("bxc-node may be is running")
 		return err
 	}
-	err=os.MkdirAll("/opt/bcloud/nodeapi/",0755)
-	if err!=nil {
-		log.Printf("mkdir  /opt/bcloud/nodeapi/ faile",err)
+	err = os.MkdirAll("/opt/bcloud/nodeapi/", 0755)
+	if err != nil {
+		log.Printf("mkdir  /opt/bcloud/nodeapi/ faile", err)
 		return err
 	}
-	Download_file(fmt.Sprintf(Bxc_node_URL,ARCH),"/opt/bcloud/nodeapi/node")
-	ioutil.WriteFile("/lib/systemd/system/bxc-node.service",[]byte(Bxc_node_sercice),0644)
-	if err!=nil {
+	Download_file(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
+	ioutil.WriteFile("/lib/systemd/system/bxc-node.service", []byte(Bxc_node_sercice), 0644)
+	if err != nil {
 		return err
 	}
-	cmd:=exec.Command("sh","-c","systemctl enable bxc-node&&systemctl status bxc-node")
+	cmd := exec.Command("sh", "-c", "systemctl enable bxc-node&&systemctl status bxc-node")
 	return cmd.Wait()
 
 }
@@ -183,18 +283,6 @@ func Download_file(_URL, _path string) (error) {
 	return nil
 }
 
-func onboot() {
-	go Set_arch()
-	go check_node()
-	timetkm := time.NewTicker(time.Second * 10)
-	for {
-		select {
-		case <-timetkm.C:
-			go check_and_update()
-		}
-	}
-}
-
 func Copyfile_force(dstName, srcName string) (error) {
 	//log.Println("cp", "-f", srcName, dstName)
 	//cmd := exec.Command("cp", "-f", srcName, dstName)
@@ -203,10 +291,10 @@ func Copyfile_force(dstName, srcName string) (error) {
 	//	return err
 	//}
 
-	return Run_command(fmt.Sprintf("cp -f %s %s",srcName,dstName))
+	return Run_command(fmt.Sprintf("cp -f %s %s", srcName, dstName))
 	//return nil
 }
-func Set_arch()  {
+func Set_arch() {
 	switch runtime.GOARCH {
 	case "amd64":
 		ARCH = "x86_64"
@@ -215,14 +303,32 @@ func Set_arch()  {
 	case "arm":
 		ARCH = "armv7l"
 	}
-	log.Printf("check device arch is: %s",ARCH)
+	log.Printf("check device arch is: %s", ARCH)
 }
 
 func Run_command(cmd_str string) error {
-	cmd:=exec.Command("sh","-c",cmd_str)
-	log.Printf("sh -c %s",cmd_str)
-	if err:=cmd.Start();err!=nil {
+	cmd := exec.Command("sh", "-c", cmd_str)
+	log.Printf("sh -c %s", cmd_str)
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 	return cmd.Wait()
+}
+func Get_latest_info() (Release_latest, error) {
+	resp, err := http.Get(Github_latest)
+	if err != nil {
+		log.Printf("get latest tag fail: %s", err)
+		return Release_latest{}, err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	var release Release_latest
+	err = json.Unmarshal(body, &release)
+	if err != nil {
+		log.Printf("Unmarshal fail: %s", err)
+		return Release_latest{}, err
+	}
+	last_release = release
+	return release, nil
+
 }
