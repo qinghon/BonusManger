@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -44,7 +46,21 @@ type Net_interfaces struct {
 	Context      string         `json:"context"`
 	Network_card []network_card `json:"network_card"`
 }
+type Status_Detail struct {
+	Bcode string `json:"bcode"`
+	Email string `json:"email"`
+	Node_version string `json:"node_version"`
+	//K8sVersion string `json:"k8s_version"`
+	Tun0 bool `json:"tun0"`
 
+}
+
+// Unmarshal used
+type nodedb struct {
+	Bcode string `json:"bcode"`
+	Email string `json:"email"`
+	Macaddress string `json:"macaddress"`
+}
 const install_ppp_script = `
 #!/bin/sh
 if which pppd >/dev/null ; then
@@ -60,19 +76,25 @@ elif which yum ; then
 fi
 `
 
+var Don_ins_node bool
+
 func main() {
+	Init()
 	go onboot()
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	e := gin.Default()
 	config := cors.DefaultConfig()
-	//config.AllowOrigins = []string{"https://console.bonuscloud.io", "https://ssl.ws.lan", "http://ssl.ws.lan","http://127.0.0.1"}
-	config.AllowAllOrigins = true
+	config.AllowOrigins = []string{"https://console.bonuscloud.io",
+		"http://bm.zzk2.icu", "http://127.0.0.1:8080","http://localhost:*"}
+	//config.AllowAllOrigins = true
 	e.Use(cors.New(config))
 	e.GET("/discovery", tp_all)
 	e.GET("/status", tp_all)
 	e.POST("/bound", tp_all)
 	e.POST("/disk", tp_all)
 	e.GET("/version", tp_all)
+	status:=e.Group("/status")
+	status.GET("/detail",get_status_detail)
 
 	e.GET("/pppoe", get_ppp)
 	e.POST("/pppoe", set_ppp)
@@ -92,6 +114,12 @@ func main() {
 	//gracehttp.Run()
 
 }
+
+func Init()  {
+	flag.BoolVar(&Don_ins_node,"D",false,"Don install bxc-node")
+	flag.Parse()
+}
+
 // Transparent 透传至官方客户端
 func tp_discovery(c *gin.Context) {
 	Transparent("127.0.0.1:9017", c)
@@ -122,7 +150,41 @@ func Transparent(target string, c *gin.Context) {
 	reverseProxy.ServeHTTP(c.Writer, c.Request)
 }
 
-
+func get_status_detail(c *gin.Context)  {
+	//var err error
+	var detail Status_Detail
+	if PathExist("/opt/bcloud/node.db") {
+		bt,err:=ioutil.ReadFile("/opt/bcloud/node.db")
+		if err!=nil {
+			log.Printf("get node.db fail: %s",err)
+		}else {
+			var node  nodedb
+			if err:=json.Unmarshal(bt,&node);err!=nil{
+				log.Printf("Unmarshal node.db error: %s",err)
+			}else {
+				detail.Bcode=node.Bcode
+				detail.Email=node.Email
+			}
+		}
+	}
+	var tmp_version map[string]string
+	node_version_bt,err:=GET("http://localhost:9017/version")
+	if err==nil {
+		err = json.Unmarshal(node_version_bt, &tmp_version)
+		if err == nil {
+			detail.Node_version = tmp_version["version"]
+		} else {
+			log.Printf("Unmarshal version fail:%s", err)
+		}
+	}
+	if net_tun0,err:=net.InterfaceByName("tun0");err==nil {
+		log.Println(net_tun0.Addrs())
+		detail.Tun0=true
+	}else {
+		detail.Tun0=false
+	}
+	c.JSON(http.StatusOK,detail)
+}
 
 func get_ppp(c *gin.Context) {
 	acc := Read_dsl_file()
@@ -220,6 +282,12 @@ func apply_net(c *gin.Context) {
 }
 
 func setppp(p Pppoe_account) (error) {
+	if ! PathExist("/dev/ppp") {
+
+		if err:=Run_command(install_ppp_script);err!=nil{
+			return err
+		}
+	}
 	fs, err := os.OpenFile("/etc/ppp/peers/"+p.Name, os.O_WRONLY|os.O_CREATE, 0660)
 	if err != nil {
 		return err
@@ -451,7 +519,6 @@ func PathExist(_path string) bool {
 	return true
 }
 
-
 func CopyFile(dstName, srcName string) (written int64, err error) {
 	src, err := os.Open(srcName)
 	if err != nil {
@@ -478,3 +545,18 @@ func getip() string {
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
 
+func GET(url string) ([]byte,error) {
+	resp,err:=http.Get(url)
+	if err!=nil {
+		log.Printf("get %s fail:%s",url,err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("read body fail:%s",err)
+		return nil, err
+	}
+	return body,nil
+
+}

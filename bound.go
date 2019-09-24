@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"os"
 )
 
 const NODEDB = "/opt/bcloud/node.db"
@@ -31,7 +27,7 @@ type ResponseData struct {
 		Ca   string `json:"ca"`
 	} `json:"Cert"`
 	Message string `json:"message"`
-	Code int `json:"code"`
+	Code    int    `json:"code"`
 	Details string `json:"details"`
 }
 type Get_Bcode struct {
@@ -70,7 +66,7 @@ type Location struct {
 	RegionCode    string  `json:"region_code"`
 }
 
-
+/*
 func Init()  {
 	email := os.Getenv("email")
 	bcode := os.Getenv("bcode")
@@ -94,42 +90,42 @@ func Init()  {
 	}
 	//log.Println("mac:",mac[0],"\temail:",email,"bcode:",bcode)
 	bound_post(bcode,email,mac[0])
-}
-func get_bcode(email string ) string {
-	resp,err:=http.Get(BCODEURL+email)
-	if err!=nil {
+}*/
+func get_bcode(email string) string {
+	resp, err := http.Get(BCODEURL + email)
+	if err != nil {
 		log.Println("bonud fail: get bcode requests fail:")
 		log.Println(err)
 		return ""
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode!=200 {
+	if resp.StatusCode != 200 {
 		log.Println("get bcode fail:")
 		return ""
 	}
-	body,err:=ioutil.ReadAll(resp.Body)
-	if err!=nil {
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		log.Println("read body failed")
-		return  ""
-	}
-	var bcodes_ret Get_Bcode
-	json.Unmarshal(body,&bcodes_ret)
-	if bcodes_ret.Code!=200 {
-		log.Println("Unmarshal body failed,raw body:",string(body))
 		return ""
 	}
-	CountryCode:=get_Location()
+	var bcodes_ret Get_Bcode
+	json.Unmarshal(body, &bcodes_ret)
+	if bcodes_ret.Code != 200 {
+		log.Println("Unmarshal body failed,raw body:", string(body))
+		return ""
+	}
+	CountryCode := get_Location()
 	log.Println(CountryCode)
 	switch CountryCode {
 	case "CN":
-		if len(bcodes_ret.Ret.Mainland)==0 {
+		if len(bcodes_ret.Ret.Mainland) == 0 {
 			return ""
 		}
 		return bcodes_ret.Ret.Mainland[0].Bcode
 	case "":
 		return ""
 	default:
-		if len(bcodes_ret.Ret.NonMainland)==0 {
+		if len(bcodes_ret.Ret.NonMainland) == 0 {
 			return ""
 		}
 		return bcodes_ret.Ret.NonMainland[0].Bcode
@@ -138,22 +134,23 @@ func get_bcode(email string ) string {
 }
 
 func get_Location() string {
-	resp,err:=http.Get("https://api.ip.sb/geoip")
-	if err!=nil {
+	resp, err := http.Get("https://api.ip.sb/geoip")
+	if err != nil {
 		log.Println("get location failed")
 		log.Println(err)
 	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	var local Location
-	json.Unmarshal(body,&local)
-	if local.CountryCode!="" {
+	json.Unmarshal(body, &local)
+	if local.CountryCode != "" {
 		return local.CountryCode
-	}else {
+	} else {
 		return ""
 	}
 }
 
+/*
 func bound_post(bcode, email, mac string) (error) {
 	if isBind() {
 		log.Println("node already bind")
@@ -161,51 +158,51 @@ func bound_post(bcode, email, mac string) (error) {
 	}
 	data := SendData{bcode, email, mac}
 	js, err := json.Marshal(data)
-	if err!=nil {
+	if err != nil {
 		log.Println(err)
 	}
 	log.Println(string(js))
 	resq, err := http.Post(BINDURL, "application/json;charset=utf-8", bytes.NewBuffer(js))
-	if err!=nil {
+	if err != nil {
 		log.Println("bonud fail:requests fail:")
 		log.Println(err.Error())
 		return err
 	}
 	defer resq.Body.Close()
 	body, _ := ioutil.ReadAll(resq.Body)
-	if resq.StatusCode!=200 {
+	if resq.StatusCode != 200 {
 		log.Println("bonud fail:")
 		log.Println(string(body))
 		return errors.New("bound fail")
 	}
 	resp_data := ResponseData{}
 	json.Unmarshal(body, &resp_data)
-	if resp_data.Code!=200&&resp_data.Code!=0 {
+	if resp_data.Code != 200 && resp_data.Code != 0 {
 		log.Println("bonud fail")
 		return errors.New("bound fail")
 	}
 	ca_str, err := base64.StdEncoding.DecodeString(resp_data.Cert.Ca)
 	err = ioutil.WriteFile(CAFILE, ca_str, 0644)
 	if err != nil {
-		 return  err
+		return err
 	}
 	key_str, err := base64.StdEncoding.DecodeString(resp_data.Cert.Key)
 	err = ioutil.WriteFile(KEYFILE, key_str, 0644)
 	if err != nil {
-		return  err
+		return err
 	}
 	cert_str, err := base64.StdEncoding.DecodeString(resp_data.Cert.Cert)
 	err = ioutil.WriteFile(CERTFILE, cert_str, 0644)
 	if err != nil {
-		return  err
+		return err
 	}
 	err = ioutil.WriteFile(NODEDB, js, 0644)
 	if err != nil {
-		return  err
+		return err
 	}
 	log.Println("Bound success")
 	return nil
-}
+}*/
 func getMacAddrs() (macAddrs []string) {
 	netInterfaces, err := net.Interfaces()
 	if err != nil {
@@ -236,4 +233,3 @@ func isBind() (bool) {
 	}
 	return true
 }
-

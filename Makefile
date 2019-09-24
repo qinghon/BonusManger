@@ -10,6 +10,7 @@ SOC:=$(shell uname -m)
 .PHONY: all
 
 all: setup build-amd64 build-aarch64 build-arm
+	md5sum `find build -name 'bon*'`>build/md5sums
 
 setup:
 	mkdir -p build/

@@ -115,7 +115,11 @@ type Release_latest struct {
 
 func onboot() {
 	go Set_arch()
-	go check_node()
+	if !Don_ins_node {
+		go check_node()
+	}else {
+		log.Println("not install as command flag")
+	}
 	timetkm := time.NewTicker(time.Minute * 10)
 	for {
 		select {
@@ -217,7 +221,7 @@ func Down_new_client(md5sum string) {
 }
 
 func check_node() (error) {
-	_, err := http.Get("http://127.0.0.1:9017")
+	_, err := http.Get("http://127.0.0.1:9017/discovery")
 	if err == nil {
 		log.Println("bxc-node may be is running")
 		return err

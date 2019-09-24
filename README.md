@@ -13,6 +13,6 @@ bash /tmp/install.sh
 bash /tmp/install.sh remove
 ```
 ### 使用
-需要先安装
+需要先[安装](https://github.com/qinghon/BonusManger#%E5%AE%89%E8%A3%85)
 
 [http://bm.zzk2.icu/server](http://bm.zzk2.icu/server)
