@@ -236,11 +236,19 @@ func check_node() (error) {
 		return err
 	}
 	Download_file(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
+	err=os.Chmod("/opt/bcloud/nodeapi/node",0755)
+	if err != nil {
+		return err
+	}
+	_,err=os.Create("/opt/bcloud/node.db")
+	if err != nil {
+		return err
+	}
 	ioutil.WriteFile("/lib/systemd/system/bxc-node.service", []byte(Bxc_node_sercice), 0644)
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("sh", "-c", "systemctl enable bxc-node&&systemctl status bxc-node")
+	cmd := exec.Command("sh", "-c", "systemctl enable bxc-node&&systemctl start bxc-node")
 	return cmd.Wait()
 
 }
