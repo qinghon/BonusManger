@@ -120,7 +120,11 @@ func onboot() {
 	}else {
 		log.Println("not install as command flag")
 	}
-	timetkm := time.NewTicker(time.Minute * 10)
+	if Don_update {
+		log.Println("O k..,it looks like you don't want to upgrade,I got it")
+		return
+	}
+	timetkm := time.NewTicker(time.Minute*10)
 	for {
 		select {
 		case <-timetkm.C:
@@ -139,6 +143,7 @@ func check_version() (string, bool) {
 		log.Println("not found new tag")
 		return "", false
 	}
+	//log.Println(fmt.Sprintf(VersionURLS, last_release.TagName))
 	resp, err := http.Get(fmt.Sprintf(VersionURLS, last_release.TagName))
 	if err != nil {
 		log.Printf("get version failed: %s", err)
@@ -162,7 +167,6 @@ func check_version() (string, bool) {
 				spl_l = append(spl_l[:i], spl_l[i+1:]...)
 			}
 		}
-
 		md5sum := spl_l[0]
 		filename := spl_l[1]
 		//log.Println(ARCH, filename, strings.Contains(ARCH, filename), spl_l, len(spl_l))

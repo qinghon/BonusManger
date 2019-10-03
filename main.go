@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"hardware"
 	"io"
 	"io/ioutil"
 	"log"
@@ -24,14 +25,16 @@ import (
 
 type ppp_conf struct {
 	Interface string   `json:"interface"`
-	Other     []string `json:"other"`
 	Mtu       int      `json:"mtu"`
+	//Linkname string `json:"linkname"`
+	Other     []string `json:"other"`
 }
 type Pppoe_account struct {
 	Name     string   `json:"name"`
 	Username string   `json:"username"`
 	Password string   `json:"password"`
 	Conf     ppp_conf `json:"conf"`
+	Status   bool `json:"status"`
 }
 type network_card struct {
 	Name    string   `json:"name"`
@@ -41,26 +44,27 @@ type network_card struct {
 type Message struct {
 	Code    int    `json:"code"`
 	Details string `json:"details"`
+	//Data interface{} `json:"data"`
 }
 type Net_interfaces struct {
 	Context      string         `json:"context"`
 	Network_card []network_card `json:"network_card"`
 }
 type Status_Detail struct {
-	Bcode string `json:"bcode"`
-	Email string `json:"email"`
+	Bcode        string `json:"bcode"`
+	Email        string `json:"email"`
 	Node_version string `json:"node_version"`
 	//K8sVersion string `json:"k8s_version"`
 	Tun0 bool `json:"tun0"`
-
 }
 
 // Unmarshal used
 type nodedb struct {
-	Bcode string `json:"bcode"`
-	Email string `json:"email"`
+	Bcode      string `json:"bcode"`
+	Email      string `json:"email"`
 	Macaddress string `json:"macaddress"`
 }
+
 const install_ppp_script = `
 #!/bin/sh
 if which pppd >/dev/null ; then
@@ -77,6 +81,7 @@ fi
 `
 
 var Don_ins_node bool
+var Don_update bool
 
 func main() {
 	Init()
@@ -85,54 +90,50 @@ func main() {
 	e := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"https://console.bonuscloud.io",
-		"http://bm.zzk2.icu", "http://127.0.0.1:8080","http://localhost:*"}
+		"http://bm.zzk2.icu", "http://127.0.0.1:8080", "http://localhost:8080"}
 	//config.AllowAllOrigins = true
 	e.Use(cors.New(config))
 	e.GET("/discovery", tp_all)
 	e.GET("/status", tp_all)
 	e.POST("/bound", tp_all)
 	e.POST("/disk", tp_all)
+	disk := e.Group("/disk")
+	disk.GET("/all", get_disk_all)
 	e.GET("/version", tp_all)
-	status:=e.Group("/status")
-	status.GET("/detail",get_status_detail)
+	status := e.Group("/status")
+	status.GET("/detail", get_status_detail)
 
 	e.GET("/pppoe", get_ppp)
 	e.POST("/pppoe", set_ppp)
-	e.DELETE("/pppoe", del_ppp)
+	e.DELETE("/pppoe/:name", del_ppp)
+	e.PATCH("/pppoe/:name",start_ppp)
+	e.PATCH("/pppoe/:name/stop",stop_ppp)
 	e.GET("/net", get_net)
 	e.PATCH("/net", apply_net)
 	e.PUT("/net", set_net)
-	//s:=&http.Server{
-	//	Addr: ":9018",
-	//	Handler:e,
-	//	//ReadTimeout:    10 * time.Second,
-	//	//WriteTimeout:   10 * time.Second,
-	//	//MaxHeaderBytes: 1 << 20,
-	//}
 	e.Run(":9018")
-	//gracehttp.AddServer(s,false,"","")
-	//gracehttp.Run()
 
 }
 
-func Init()  {
-	flag.BoolVar(&Don_ins_node,"D",false,"Don install bxc-node")
+func Init() {
+	flag.BoolVar(&Don_ins_node, "D", false, "Don install bxc-node")
+	flag.BoolVar(&Don_update, "U", false, "Don check update")
 	flag.Parse()
 }
 
-// Transparent 透传至官方客户端
-func tp_discovery(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
-}
-func tp_status(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
-}
-func tp_bound(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
-}
-func tp_disk(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
-}
+//// Transparent 透传至官方客户端
+//func tp_discovery(c *gin.Context) {
+//	Transparent("127.0.0.1:9017", c)
+//}
+//func tp_status(c *gin.Context) {
+//	Transparent("127.0.0.1:9017", c)
+//}
+//func tp_bound(c *gin.Context) {
+//	Transparent("127.0.0.1:9017", c)
+//}
+//func tp_disk(c *gin.Context) {
+//	Transparent("127.0.0.1:9017", c)
+//}
 func tp_all(c *gin.Context) {
 	Transparent("127.0.0.1:9017", c)
 }
@@ -150,26 +151,26 @@ func Transparent(target string, c *gin.Context) {
 	reverseProxy.ServeHTTP(c.Writer, c.Request)
 }
 
-func get_status_detail(c *gin.Context)  {
+func get_status_detail(c *gin.Context) {
 	//var err error
 	var detail Status_Detail
 	if PathExist("/opt/bcloud/node.db") {
-		bt,err:=ioutil.ReadFile("/opt/bcloud/node.db")
-		if err!=nil {
-			log.Printf("get node.db fail: %s",err)
-		}else {
-			var node  nodedb
-			if err:=json.Unmarshal(bt,&node);err!=nil{
-				log.Printf("Unmarshal node.db error: %s",err)
-			}else {
-				detail.Bcode=node.Bcode
-				detail.Email=node.Email
+		bt, err := ioutil.ReadFile("/opt/bcloud/node.db")
+		if err != nil {
+			log.Printf("get node.db fail: %s", err)
+		} else {
+			var node nodedb
+			if err := json.Unmarshal(bt, &node); err != nil {
+				log.Printf("Unmarshal node.db error: %s", err)
+			} else {
+				detail.Bcode = node.Bcode
+				detail.Email = node.Email
 			}
 		}
 	}
 	var tmp_version map[string]string
-	node_version_bt,err:=GET("http://localhost:9017/version")
-	if err==nil {
+	node_version_bt, err := GET("http://localhost:9017/version")
+	if err == nil {
 		err = json.Unmarshal(node_version_bt, &tmp_version)
 		if err == nil {
 			detail.Node_version = tmp_version["version"]
@@ -177,18 +178,20 @@ func get_status_detail(c *gin.Context)  {
 			log.Printf("Unmarshal version fail:%s", err)
 		}
 	}
-	if net_tun0,err:=net.InterfaceByName("tun0");err==nil {
+	if net_tun0, err := net.InterfaceByName("tun0"); err == nil {
 		log.Println(net_tun0.Addrs())
-		detail.Tun0=true
-	}else {
-		detail.Tun0=false
+		detail.Tun0 = true
+	} else {
+		detail.Tun0 = false
 	}
-	c.JSON(http.StatusOK,detail)
+	c.JSON(http.StatusOK, detail)
 }
 
 func get_ppp(c *gin.Context) {
+	//name:=c.Params("name")
 	acc := Read_dsl_file()
 	c.JSON(http.StatusOK, acc)
+
 }
 func set_ppp(c *gin.Context) {
 	var acc_conf Pppoe_account
@@ -213,24 +216,52 @@ func set_ppp(c *gin.Context) {
 	}
 }
 func del_ppp(c *gin.Context) {
-	var p Pppoe_account
-	if err := c.ShouldBindJSON(&p); err != nil {
-		log.Printf("bind to Pppoe_account error: %s", err)
+	name:=c.Param("name")
+	if name=="" {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve json failed"})
 	}
-	if p.Name == "" {
-		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
-	}
-	if ! PathExist("/etc/ppp/peers/" + p.Name) {
+
+	if ! PathExist("/etc/ppp/peers/" + name) {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
-			fmt.Sprintf("file %s not found", p.Name)})
+			fmt.Sprintf("file %s not found", name)})
 	}
-	err := os.Remove("/etc/ppp/peers/" + p.Name)
+	err := os.Remove("/etc/ppp/peers/" + name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
-			fmt.Sprintf("file %s remove failed", p.Name)})
+			fmt.Sprintf("file %s remove failed", name)})
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", p.Name)})
+		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", name)})
+	}
+}
+func start_ppp(c *gin.Context)  {
+	filename:=c.Param("name")
+	if filename=="" {
+		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"not get a name"})
+		return
+	}
+	if ! PathExist("/etc/ppp/peers/" + filename) {
+		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"file name not found"})
+	}
+	kill_ppp(filename)
+	if err:=run_ppp(Pppoe_account{filename,"","",ppp_conf{},false});err!=nil {
+		c.JSON(http.StatusInternalServerError,Message{http.StatusInternalServerError,
+		fmt.Sprintf("start pppoe file %s fail:%s",filename,err)})
+	}
+}
+func stop_ppp(c *gin.Context)  {
+	filename:=c.Param("name")
+	if filename=="" {
+		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"not get a name"})
+		return
+	}
+	if ! PathExist("/etc/ppp/peers/" + filename) {
+		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"file name not found"})
+	}
+	if err:=kill_ppp(filename);err!=nil {
+		c.JSON(http.StatusInternalServerError,Message{http.StatusInternalServerError,
+		fmt.Sprintf("stop %s fail: %s",filename,err)})
+	}else {
+		c.JSON(http.StatusOK,Message{http.StatusOK,"OK"})
 	}
 }
 func get_net(c *gin.Context) {
@@ -280,15 +311,22 @@ func apply_net(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
+func get_disk_all(c *gin.Context) {
+	block, err := hardware.Get_block()
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
+			fmt.Sprintf("get block error: %s", err)})
+	}
+	c.JSON(http.StatusOK, block)
+}
 
 func setppp(p Pppoe_account) (error) {
-	if ! PathExist("/dev/ppp") {
 
-		if err:=Run_command(install_ppp_script);err!=nil{
-			return err
-		}
+	if err:=check_ppp();err!=nil{
+		return err
 	}
-	fs, err := os.OpenFile("/etc/ppp/peers/"+p.Name, os.O_WRONLY|os.O_CREATE, 0660)
+	//log.Println(p.Conf)
+	fs, err := os.OpenFile("/etc/ppp/peers/"+p.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0660)
 	if err != nil {
 		return err
 	}
@@ -299,14 +337,20 @@ func setppp(p Pppoe_account) (error) {
 		conf_str += fmt.Sprintf("\nmtu %d ", p.Conf.Mtu)
 	}
 	conf_str += "\n"
+	//log.Print(conf_str)
 	_, err = fs.WriteString(conf_str)
 	if err != nil {
 		return err
 	}
-	err = set_chap_secrets(p)
-	return err
+	if err := set_secrets(p, "/etc/ppp/chap-secrets"); err != nil {
+		return err
+	}
+	return set_secrets(p, "/etc/ppp/pap-secrets")
 }
+
+
 func run_ppp(p Pppoe_account) (error) {
+
 	cmd := exec.Command("pppd", "call", p.Name)
 	err := cmd.Start()
 	if err != nil {
@@ -314,7 +358,27 @@ func run_ppp(p Pppoe_account) (error) {
 	}
 	return cmd.Wait()
 }
-
+func kill_ppp(name string) error {
+	return Run_command(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`",name))
+}
+func Get_ppp_status(p Pppoe_account) (Pppoe_account) {
+	pid_file:=fmt.Sprintf("/var/run/ppp-%s.pid",p.Name)
+	if ! PathExist(pid_file) {
+		log.Printf("not found pid file: %s",pid_file)
+		p.Status=false
+		return p
+	}
+	content,err:=ioutil.ReadFile(pid_file)
+	if err!=nil {
+		log.Printf("read pid file %s fail: %s",pid_file,err)
+		return p
+	}
+	spl:=strings.Split(string(content),"\n")
+	log.Println(spl)
+	pid:=spl[0]
+	p.Status=(pid!="")
+	return p
+}
 func Read_dsl_file() []Pppoe_account {
 	configs := []Pppoe_account{}
 	files := getFilelist("/etc/ppp/peers")
@@ -331,7 +395,10 @@ func Read_dsl_file() []Pppoe_account {
 		configs = append(configs, *tmp)
 	}
 	configs = read_chap_secrets(configs)
-	log.Println(configs)
+	for i,p:=range configs {
+		configs[i]=Get_ppp_status(p)
+	}
+	//log.Println(configs)
 	return configs
 }
 func resolve_dsl_file(f_path string) (*Pppoe_account, error) {
@@ -442,13 +509,17 @@ func read_chap_secrets(acc []Pppoe_account) []Pppoe_account {
 	}
 	return acc
 }
-func set_chap_secrets(p Pppoe_account) (error) {
-	fstr, err := ioutil.ReadFile("/etc/ppp/chap-secrets")
+func set_secrets(p Pppoe_account, filename string) (error) {
+	//filename:="/etc/ppp/chap-secrets"
+	if ! PathExist(filename) {
+		os.Create(filename)
+	}
+	fstr, err := ioutil.ReadFile(filename)
 	if err != nil {
 		log.Println("set passwd fail", err)
 		return err
 	}
-	fc, err := os.OpenFile("/etc/ppp/chap-secrets", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0600)
+	fc, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0600)
 	if err != nil {
 		log.Println("set passwd fail", err)
 		return err
@@ -545,18 +616,36 @@ func getip() string {
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
 
-func GET(url string) ([]byte,error) {
-	resp,err:=http.Get(url)
-	if err!=nil {
-		log.Printf("get %s fail:%s",url,err)
+func check_ppp() (error) {
+	_, err := exec.LookPath("pppd")
+	if err != nil {
+		return Intsall_ppp()
+	}
+	if ! PathExist("/dev/ppp") {
+		return Intsall_ppp()
+	}
+	return nil
+}
+func Intsall_ppp() error {
+	if err := Run_command(install_ppp_script); err != nil {
+		log.Printf("Install pppoe software failed")
+		return err
+	}
+	return nil
+}
+
+func GET(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("get %s fail:%s", url, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("read body fail:%s",err)
+		log.Printf("read body fail:%s", err)
 		return nil, err
 	}
-	return body,nil
+	return body, nil
 
 }

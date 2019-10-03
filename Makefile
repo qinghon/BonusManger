@@ -10,7 +10,7 @@ SOC:=$(shell uname -m)
 .PHONY: all
 
 all: setup build-amd64 build-aarch64 build-arm
-	md5sum `find build -name 'bon*'`>build/md5sums
+	md5sum `find build -name 'bon*'`>build/md5sum
 
 setup:
 	mkdir -p build/
@@ -31,7 +31,7 @@ docker-amd64: build-amd64
 	docker build -f 'docker/Dockerfile' -t  bonusmanger:latest .
 
 docker-aarch64: build-aarch64
-	docker -H tcp://node.lan build -f 'docker/Dockerfile_aarch64' -t  bonusmanger:latest .
+	docker -H tcp://node1.lan build -f 'docker/Dockerfile_aarch64' -t  bonusmanger:latest .
 
 
 
