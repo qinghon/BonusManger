@@ -3,8 +3,8 @@ package hardware
 import (
 	"encoding/json"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os/exec"
+	"syscall"
 	"system/package"
 )
 
@@ -91,7 +91,7 @@ func CreatePV(dev string) (PV, error) {
 
 func RemovePV(pv Pv) (PV, error) {
 	if pv.VgName != "" {
-		if _,err:=RemoveVg(Vg{pv.VgName,"","","","","",""});err!=nil{
+		if _, err := RemoveVg(Vg{pv.VgName, "", "", "", "", "", ""}); err != nil {
 			return PV{}, err
 		}
 	}
@@ -179,7 +179,19 @@ func CreateLv(lv Lv) (LV, error) {
 }
 
 func RemoveLv(lv []Lv) (LV, error) {
+	mts,err:=ReadMounts("/proc/mounts")
+	if err != nil {
+		return LV{}, err
+	}
+
 	for _, l := range lv {
+		for _,m:=range mts.Mounts {
+			if fmt.Sprintf("/dev/%s-%s", l.VgName, l.LvName) ==m.Device {
+				if err:=Umount(m.MountPoint);err!=nil{
+					return LV{}, err
+				}
+			}
+		}
 		cmd := exec.Command("lvremove", fmt.Sprintf("/dev/%s/%s", l.VgName, l.LvName))
 		_, err := cmd.Output()
 		if err != nil {
@@ -190,5 +202,6 @@ func RemoveLv(lv []Lv) (LV, error) {
 }
 
 func Umount(dev string) (error) {
-	return unix.Unmount(dev,0) //todo 测试卸载命令flag
+	// dev: /mnt is mounted point
+	return syscall.Unmount(dev, 0)
 }

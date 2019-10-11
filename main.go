@@ -24,17 +24,17 @@ import (
 )
 
 type ppp_conf struct {
-	Interface string   `json:"interface"`
-	Mtu       int      `json:"mtu"`
+	Interface string `json:"interface"`
+	Mtu       int    `json:"mtu"`
 	//Linkname string `json:"linkname"`
-	Other     []string `json:"other"`
+	Other []string `json:"other"`
 }
 type Pppoe_account struct {
 	Name     string   `json:"name"`
 	Username string   `json:"username"`
 	Password string   `json:"password"`
 	Conf     ppp_conf `json:"conf"`
-	Status   bool `json:"status"`
+	Status   bool     `json:"status"`
 }
 type network_card struct {
 	Name    string   `json:"name"`
@@ -106,8 +106,8 @@ func main() {
 	e.GET("/pppoe", get_ppp)
 	e.POST("/pppoe", set_ppp)
 	e.DELETE("/pppoe/:name", del_ppp)
-	e.PATCH("/pppoe/:name",start_ppp)
-	e.PATCH("/pppoe/:name/stop",stop_ppp)
+	e.PATCH("/pppoe/:name", start_ppp)
+	e.PATCH("/pppoe/:name/stop", stop_ppp)
 	e.GET("/net", get_net)
 	e.PATCH("/net", apply_net)
 	e.PUT("/net", set_net)
@@ -208,16 +208,16 @@ func set_ppp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError,
 			Message{http.StatusInternalServerError, "Set ppp account error:" +
 				fmt.Sprintf("%s", err)})
-	} else if err = run_ppp(acc_conf); err != nil {
+	} else if by, err := run_ppp(acc_conf); err != nil {
 		c.JSON(http.StatusOK, Message{http.StatusInternalServerError,
-			fmt.Sprintf("pppoe call fail: %s", err)})
+			fmt.Sprintf("pppoe call fail: %s\n %s", string(by), err)})
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, "Set " + acc_conf.Name + " OK"})
+		c.JSON(http.StatusOK, Message{http.StatusOK, "Set " + acc_conf.Name + " OK "})
 	}
 }
 func del_ppp(c *gin.Context) {
-	name:=c.Param("name")
-	if name=="" {
+	name := c.Param("name")
+	if name == "" {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve json failed"})
 	}
 
@@ -233,35 +233,37 @@ func del_ppp(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", name)})
 	}
 }
-func start_ppp(c *gin.Context)  {
-	filename:=c.Param("name")
-	if filename=="" {
-		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"not get a name"})
+func start_ppp(c *gin.Context) {
+	filename := c.Param("name")
+	if filename == "" {
+		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "not get a name"})
 		return
 	}
 	if ! PathExist("/etc/ppp/peers/" + filename) {
-		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"file name not found"})
+		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
 	kill_ppp(filename)
-	if err:=run_ppp(Pppoe_account{filename,"","",ppp_conf{},false});err!=nil {
-		c.JSON(http.StatusInternalServerError,Message{http.StatusInternalServerError,
-		fmt.Sprintf("start pppoe file %s fail:%s",filename,err)})
+	if by, err := run_ppp(Pppoe_account{filename, "", "", ppp_conf{}, false}); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("start pppoe file %s fail:%s\n%s", filename, string(by), err)})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("%s", string(by))})
 	}
 }
-func stop_ppp(c *gin.Context)  {
-	filename:=c.Param("name")
-	if filename=="" {
-		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"not get a name"})
+func stop_ppp(c *gin.Context) {
+	filename := c.Param("name")
+	if filename == "" {
+		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "not get a name"})
 		return
 	}
 	if ! PathExist("/etc/ppp/peers/" + filename) {
-		c.JSON(http.StatusNotFound,Message{http.StatusNotFound,"file name not found"})
+		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	if err:=kill_ppp(filename);err!=nil {
-		c.JSON(http.StatusInternalServerError,Message{http.StatusInternalServerError,
-		fmt.Sprintf("stop %s fail: %s",filename,err)})
-	}else {
-		c.JSON(http.StatusOK,Message{http.StatusOK,"OK"})
+	if err := kill_ppp(filename); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("stop %s fail: %s", filename, err)})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
 func get_net(c *gin.Context) {
@@ -322,7 +324,7 @@ func get_disk_all(c *gin.Context) {
 
 func setppp(p Pppoe_account) (error) {
 
-	if err:=check_ppp();err!=nil{
+	if err := check_ppp(); err != nil {
 		return err
 	}
 	//log.Println(p.Conf)
@@ -348,35 +350,34 @@ func setppp(p Pppoe_account) (error) {
 	return set_secrets(p, "/etc/ppp/pap-secrets")
 }
 
-
-func run_ppp(p Pppoe_account) (error) {
+func run_ppp(p Pppoe_account) ([]byte, error) {
 
 	cmd := exec.Command("pppd", "call", p.Name)
 	err := cmd.Start()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return cmd.Wait()
+	return cmd.Output()
 }
 func kill_ppp(name string) error {
-	return Run_command(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`",name))
+	return Run_command(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`", name))
 }
 func Get_ppp_status(p Pppoe_account) (Pppoe_account) {
-	pid_file:=fmt.Sprintf("/var/run/ppp-%s.pid",p.Name)
+	pid_file := fmt.Sprintf("/var/run/ppp-%s.pid", p.Name)
 	if ! PathExist(pid_file) {
-		log.Printf("not found pid file: %s",pid_file)
-		p.Status=false
+		log.Printf("not found pid file: %s", pid_file)
+		p.Status = false
 		return p
 	}
-	content,err:=ioutil.ReadFile(pid_file)
-	if err!=nil {
-		log.Printf("read pid file %s fail: %s",pid_file,err)
+	content, err := ioutil.ReadFile(pid_file)
+	if err != nil {
+		log.Printf("read pid file %s fail: %s", pid_file, err)
 		return p
 	}
-	spl:=strings.Split(string(content),"\n")
+	spl := strings.Split(string(content), "\n")
 	log.Println(spl)
-	pid:=spl[0]
-	p.Status=(pid!="")
+	pid := spl[0]
+	p.Status = (pid != "")
 	return p
 }
 func Read_dsl_file() []Pppoe_account {
@@ -395,8 +396,8 @@ func Read_dsl_file() []Pppoe_account {
 		configs = append(configs, *tmp)
 	}
 	configs = read_chap_secrets(configs)
-	for i,p:=range configs {
-		configs[i]=Get_ppp_status(p)
+	for i, p := range configs {
+		configs[i] = Get_ppp_status(p)
 	}
 	//log.Println(configs)
 	return configs

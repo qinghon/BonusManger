@@ -232,7 +232,7 @@ func check_node() (error) {
 	}
 	err = os.MkdirAll("/opt/bcloud/nodeapi/", 0755)
 	if err != nil {
-		log.Printf("mkdir  /opt/bcloud/nodeapi/ faile", err)
+		log.Printf("mkdir  /opt/bcloud/nodeapi/ fail: %s", err)
 		return err
 	}
 	Download_file(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
