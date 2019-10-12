@@ -29,13 +29,19 @@ type ppp_conf struct {
 	//Linkname string `json:"linkname"`
 	Other []string `json:"other"`
 }
-type Pppoe_account struct {
-	Name     string   `json:"name"`
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	Conf     ppp_conf `json:"conf"`
-	Status   bool     `json:"status"`
+type ppp_status struct {
+	Pid   int      `json:"pid"`
+	Iface string   `json:"iface"`
+	IP    []string `json:"ip"`
 }
+type Pppoe_account struct {
+	Name     string     `json:"name"`
+	Username string     `json:"username"`
+	Password string     `json:"password"`
+	Conf     ppp_conf   `json:"conf"`
+	Status   ppp_status `json:"status"`
+}
+
 type network_card struct {
 	Name    string   `json:"name"`
 	Macaddr string   `json:"macaddr"`
@@ -205,8 +211,8 @@ func set_ppp(c *gin.Context) {
 	}
 	err := setppp(acc_conf)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError,
-			Message{http.StatusInternalServerError, "Set ppp account error:" +
+		c.JSON(http.StatusNotImplemented,
+			Message{http.StatusNotImplemented, "Set ppp account error:" +
 				fmt.Sprintf("%s", err)})
 	} else if by, err := run_ppp(acc_conf); err != nil {
 		c.JSON(http.StatusOK, Message{http.StatusInternalServerError,
@@ -220,8 +226,7 @@ func del_ppp(c *gin.Context) {
 	if name == "" {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve json failed"})
 	}
-
-	if ! PathExist("/etc/ppp/peers/" + name) {
+	if !PathExist("/etc/ppp/peers/" + name) {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
 			fmt.Sprintf("file %s not found", name)})
 	}
@@ -239,11 +244,11 @@ func start_ppp(c *gin.Context) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "not get a name"})
 		return
 	}
-	if ! PathExist("/etc/ppp/peers/" + filename) {
+	if !PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
 	kill_ppp(filename)
-	if by, err := run_ppp(Pppoe_account{filename, "", "", ppp_conf{}, false}); err != nil {
+	if by, err := run_ppp(Pppoe_account{filename, "", "", ppp_conf{}, ppp_status{}}); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("start pppoe file %s fail:%s\n%s", filename, string(by), err)})
 	} else {
@@ -256,7 +261,7 @@ func stop_ppp(c *gin.Context) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "not get a name"})
 		return
 	}
-	if ! PathExist("/etc/ppp/peers/" + filename) {
+	if !PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
 	if err := kill_ppp(filename); err != nil {
@@ -322,7 +327,7 @@ func get_disk_all(c *gin.Context) {
 	c.JSON(http.StatusOK, block)
 }
 
-func setppp(p Pppoe_account) (error) {
+func setppp(p Pppoe_account) error {
 
 	if err := check_ppp(); err != nil {
 		return err
@@ -347,40 +352,104 @@ func setppp(p Pppoe_account) (error) {
 	if err := set_secrets(p, "/etc/ppp/chap-secrets"); err != nil {
 		return err
 	}
-	return set_secrets(p, "/etc/ppp/pap-secrets")
+	if err := set_secrets(p, "/etc/ppp/pap-secrets"); err != nil {
+		return err
+	}
+	return setppp_auto(p)
+}
+func setppp_auto(p Pppoe_account) error {
+	inface := fmt.Sprintf(`
+auto %s
+iface %s inet ppp
+pre-up /bin/ip link set %s up  # line maintained by bonusmanger
+provider %s
+`, p.Name, p.Name, p.Conf.Interface, p.Name)
+	by, err := ioutil.ReadFile("/etc/network/interfaces")
+	if strings.Contains(string(by), fmt.Sprintf("auto %s", p.Name)) {
+		return nil
+	}
+	fp, err := os.OpenFile("/etc/network/interfaces", os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer fp.Close()
+	_, err = fp.WriteString(inface)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
+/*func delppp_auto(name string) {
+	// name : dsl file name //todo 删除interfaces文件中的自启动拨号
+
+}*/
 func run_ppp(p Pppoe_account) ([]byte, error) {
 
 	cmd := exec.Command("pppd", "call", p.Name)
-	err := cmd.Start()
-	if err != nil {
-		return nil, err
-	}
+	//err := cmd.Start()
+	//if err != nil {
+	//	return nil, err
+	//}
 	return cmd.Output()
 }
 func kill_ppp(name string) error {
 	return Run_command(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`", name))
 }
-func Get_ppp_status(p Pppoe_account) (Pppoe_account) {
+func Get_ppp_status(p Pppoe_account) Pppoe_account {
 	pid_file := fmt.Sprintf("/var/run/ppp-%s.pid", p.Name)
-	if ! PathExist(pid_file) {
+	if !PathExist(pid_file) {
 		log.Printf("not found pid file: %s", pid_file)
-		p.Status = false
+		p.Status = ppp_status{0, "", nil}
 		return p
 	}
 	content, err := ioutil.ReadFile(pid_file)
 	if err != nil {
 		log.Printf("read pid file %s fail: %s", pid_file, err)
+		p.Status = ppp_status{0, "", nil}
 		return p
 	}
 	spl := strings.Split(string(content), "\n")
 	log.Println(spl)
-	pid := spl[0]
-	p.Status = (pid != "")
+	if len(spl) == 1 && spl[0] != "" {
+		i, err := strconv.Atoi(spl[0])
+		if err != nil {
+			log.Println(err)
+			i = 0
+		}
+		p.Status = ppp_status{i, "", nil}
+		return p
+	} else if len(spl) > 1 {
+		i, err := strconv.Atoi(spl[0])
+		if err != nil {
+			i = 0
+		}
+		p.Status.Pid = i
+		p.Status.Iface = spl[1]
+		iface, err := net.InterfaceByName(spl[1])
+		if err != nil {
+			log.Println(err)
+			p.Status.IP = nil
+			return p
+		}
+		adds, err := iface.Addrs()
+		if err != nil {
+			log.Println(err)
+			p.Status.IP = nil
+			return p
+		}
+		for _, a := range adds {
+			p.Status.IP = append(p.Status.IP, a.String())
+			return p
+		}
+	} else {
+		p.Status = ppp_status{0, "", nil}
+		return p
+	}
 	return p
 }
 func Read_dsl_file() []Pppoe_account {
+
 	configs := []Pppoe_account{}
 	files := getFilelist("/etc/ppp/peers")
 	if len(*files) == 0 {
@@ -398,6 +467,7 @@ func Read_dsl_file() []Pppoe_account {
 	configs = read_chap_secrets(configs)
 	for i, p := range configs {
 		configs[i] = Get_ppp_status(p)
+
 	}
 	//log.Println(configs)
 	return configs
@@ -458,7 +528,7 @@ func resolve_dsl_file(f_path string) (*Pppoe_account, error) {
 func getFilelist(path string) *[]string {
 	files := &[]string{}
 	err := filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
-		if (f == nil) {
+		if f == nil {
 			return err
 		}
 		if f.IsDir() {
@@ -510,9 +580,9 @@ func read_chap_secrets(acc []Pppoe_account) []Pppoe_account {
 	}
 	return acc
 }
-func set_secrets(p Pppoe_account, filename string) (error) {
+func set_secrets(p Pppoe_account, filename string) error {
 	//filename:="/etc/ppp/chap-secrets"
-	if ! PathExist(filename) {
+	if !PathExist(filename) {
 		os.Create(filename)
 	}
 	fstr, err := ioutil.ReadFile(filename)
@@ -532,7 +602,7 @@ func set_secrets(p Pppoe_account, filename string) (error) {
 	if bytes.Contains(fstr, []byte(p.Username)) {
 		lines := strings.Split(string(fstr), "\n")
 		for i, line := range lines {
-			if strings.Contains(line, p.Username, ) {
+			if strings.Contains(line, p.Username) {
 				lines[i] = fmt.Sprintf("\"%s\" * \"%s\" ", p.Username, p.Password)
 			}
 		}
@@ -543,7 +613,7 @@ func set_secrets(p Pppoe_account, filename string) (error) {
 		//log.Println(fmt.Sprintf("\n\"%s\" * \"%s\" ",p.Username,p.Password))
 		fstr = append(fstr, []byte(fmt.Sprintf("\n\"%s\" * \"%s\"\n", p.Username, p.Password))...)
 	}
-	log.Print(string(fstr))
+	//log.Print(string(fstr))
 	_, err = fc.Write(fstr)
 	return err
 }
@@ -617,12 +687,12 @@ func getip() string {
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
 
-func check_ppp() (error) {
+func check_ppp() error {
 	_, err := exec.LookPath("pppd")
 	if err != nil {
 		return Intsall_ppp()
 	}
-	if ! PathExist("/dev/ppp") {
+	if !PathExist("/dev/ppp") {
 		return Intsall_ppp()
 	}
 	return nil
