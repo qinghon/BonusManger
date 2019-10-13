@@ -117,14 +117,14 @@ func onboot() {
 	go Set_arch()
 	if !Don_ins_node {
 		go check_node()
-	}else {
+	} else {
 		log.Println("not install as command flag")
 	}
 	if Don_update {
-		log.Println("O k..,it looks like you don't want to upgrade,I got it")
+		log.Println("Ok..,it looks like you don't want to upgrade,I got it")
 		return
 	}
-	timetkm := time.NewTicker(time.Minute*10)
+	timetkm := time.NewTicker(time.Minute * 10)
 	for {
 		select {
 		case <-timetkm.C:
@@ -170,7 +170,7 @@ func check_version() (string, bool) {
 		md5sum := spl_l[0]
 		filename := spl_l[1]
 		//log.Println(ARCH, filename, strings.Contains(ARCH, filename), spl_l, len(spl_l))
-		if ! strings.Contains(filename, ARCH) {
+		if !strings.Contains(filename, ARCH) {
 			continue
 		}
 		//log.Println(md5sum, md5sum_local)
@@ -224,7 +224,7 @@ func Down_new_client(md5sum string) {
 	os.Exit(1)
 }
 
-func check_node() (error) {
+func check_node() error {
 	_, err := http.Get("http://127.0.0.1:9017/discovery")
 	if err == nil {
 		log.Println("bxc-node may be is running")
@@ -236,11 +236,11 @@ func check_node() (error) {
 		return err
 	}
 	Download_file(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
-	err=os.Chmod("/opt/bcloud/nodeapi/node",0755)
+	err = os.Chmod("/opt/bcloud/nodeapi/node", 0755)
 	if err != nil {
 		return err
 	}
-	_,err=os.Create("/opt/bcloud/node.db")
+	_, err = os.Create("/opt/bcloud/node.db")
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func GetCurPath() string {
 	return rst
 }
 
-func Download_file(_URL, _path string) (error) {
+func Download_file(_URL, _path string) error {
 	resp, err := http.Get(_URL)
 	if err != nil {
 		log.Printf("get file error:%s ,url: %s", err, _URL)
@@ -299,7 +299,7 @@ func Download_file(_URL, _path string) (error) {
 	return nil
 }
 
-func Copyfile_force(dstName, srcName string) (error) {
+func Copyfile_force(dstName, srcName string) error {
 	//log.Println("cp", "-f", srcName, dstName)
 	//cmd := exec.Command("cp", "-f", srcName, dstName)
 	//err := cmd.Start()

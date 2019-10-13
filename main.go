@@ -21,7 +21,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
+
+const Version = "v0.3.8"
 
 type ppp_conf struct {
 	Interface string `json:"interface"`
@@ -111,12 +114,16 @@ func main() {
 
 	e.GET("/pppoe", get_ppp)
 	e.POST("/pppoe", set_ppp)
+	e.POST("/pppoe/install", install_ppp)
 	e.DELETE("/pppoe/:name", del_ppp)
 	e.PATCH("/pppoe/:name", start_ppp)
 	e.PATCH("/pppoe/:name/stop", stop_ppp)
 	e.GET("/net", get_net)
 	e.PATCH("/net", apply_net)
 	e.PUT("/net", set_net)
+
+	e.POST("/update", update)
+	e.GET("/v", getVersion)
 	e.Run(":9018")
 
 }
@@ -238,6 +245,14 @@ func del_ppp(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", name)})
 	}
 }
+func install_ppp(c *gin.Context) {
+	if by, err := check_ppp(); err != nil {
+		c.JSON(http.StatusOK, Message{http.StatusInternalServerError,
+			fmt.Sprintf("pppoe install fail: \n %s\n %s", string(by), err)})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+	}
+}
 func start_ppp(c *gin.Context) {
 	filename := c.Param("name")
 	if filename == "" {
@@ -326,12 +341,52 @@ func get_disk_all(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, block)
 }
+func update(c *gin.Context) {
+	file, err := c.FormFile("bonusmanger")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("not found upload file:%s", err)})
+	}
+	log.Printf("load upload update exec")
+	fp, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("open file failed: %s", err)})
+	}
+	content, err := ioutil.ReadAll(fp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("read file failed: %s", err)})
+	}
+	log.Printf("file size : %d", len(content))
+	f, err := os.OpenFile("/tmp/bonusmanger", os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
+	defer f.Close()
+	_, err = f.Write(content)
+	if err != nil {
+		log.Printf("write file failed:  %s", err)
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("write file failed:  %s", err)})
+		return
+	}
+	err = Copyfile_force("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
+	if err != nil {
+		log.Printf("copy file failed:  %s", err)
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("copy file failed:  %s", err)})
+	}
+	c.JSON(http.StatusOK, Message{http.StatusOK, "OK ,reboot now"})
+	go func() {
+		time.Sleep(time.Second * 2)
+		os.Exit(1)
+	}()
+}
+func getVersion(c *gin.Context) {
+	md5sum_local := Getfilemd5(os.Args[0])
+	c.JSON(http.StatusOK, gin.H{"version": Version, "md5sum": md5sum_local})
+}
 
 func setppp(p Pppoe_account) error {
 
-	if err := check_ppp(); err != nil {
-		return err
-	}
 	//log.Println(p.Conf)
 	fs, err := os.OpenFile("/etc/ppp/peers/"+p.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0660)
 	if err != nil {
@@ -687,7 +742,7 @@ func getip() string {
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
 
-func check_ppp() error {
+func check_ppp() ([]byte, error) {
 	_, err := exec.LookPath("pppd")
 	if err != nil {
 		return Intsall_ppp()
@@ -695,14 +750,16 @@ func check_ppp() error {
 	if !PathExist("/dev/ppp") {
 		return Intsall_ppp()
 	}
-	return nil
+	return nil, nil
 }
-func Intsall_ppp() error {
-	if err := Run_command(install_ppp_script); err != nil {
-		log.Printf("Install pppoe software failed")
-		return err
-	}
-	return nil
+func Intsall_ppp() ([]byte, error) {
+	log.Println("sh", "-c", install_ppp_script)
+	cmd := exec.Command("sh", "-c", install_ppp_script)
+	//if err := Run_command(install_ppp_script); err != nil {
+	//	log.Printf("Install pppoe software failed")
+	//	return err
+	//}
+	return cmd.Output()
 }
 
 func GET(url string) ([]byte, error) {
