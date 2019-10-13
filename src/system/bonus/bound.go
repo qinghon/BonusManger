@@ -1,11 +1,16 @@
-package main
+package bonus
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
+	"os"
+	"system/tools"
+	"time"
 )
 
 const NODEDB = "/opt/bcloud/node.db"
@@ -16,9 +21,9 @@ const BCODEURL = "https://console.bonuscloud.io/api/bcode/getBcodeForOther/?emai
 const BINDURL = "https://console.bonuscloud.io/api/web/devices/bind"
 
 type SendData struct {
-	Bcode       string `json:"bcode"`
-	Email       string `json:"email"`
-	Mac_address string `json:"mac_address"`
+	Bcode      string `json:"bcode"`
+	Email      string `json:"email"`
+	MacAddress string `json:"mac_address"`
 }
 type ResponseData struct {
 	Cert struct {
@@ -30,7 +35,7 @@ type ResponseData struct {
 	Code    int    `json:"code"`
 	Details string `json:"details"`
 }
-type Get_Bcode struct {
+type GetBcode struct {
 	Code int `json:"code"`
 	Ret  struct {
 		List []struct {
@@ -82,7 +87,7 @@ func Init()  {
 	}
 	log.Println(mac)
 	if bcode=="" {
-		bcode=get_bcode(email)
+		bcode=getBcode(email)
 		if bcode=="" {
 			log.Println("not set bcode and get bcode faild")
 			//os.Exit(4)
@@ -91,7 +96,7 @@ func Init()  {
 	//log.Println("mac:",mac[0],"\temail:",email,"bcode:",bcode)
 	bound_post(bcode,email,mac[0])
 }*/
-func get_bcode(email string) string {
+func getBcode(email string) string {
 	resp, err := http.Get(BCODEURL + email)
 	if err != nil {
 		log.Println("bonud fail: get bcode requests fail:")
@@ -108,13 +113,13 @@ func get_bcode(email string) string {
 		log.Println("read body failed")
 		return ""
 	}
-	var bcodes_ret Get_Bcode
+	var bcodes_ret GetBcode
 	json.Unmarshal(body, &bcodes_ret)
 	if bcodes_ret.Code != 200 {
 		log.Println("Unmarshal body failed,raw body:", string(body))
 		return ""
 	}
-	CountryCode := get_Location()
+	CountryCode := getLocation()
 	log.Println(CountryCode)
 	switch CountryCode {
 	case "CN":
@@ -133,7 +138,7 @@ func get_bcode(email string) string {
 	}
 }
 
-func get_Location() string {
+func getLocation() string {
 	resp, err := http.Get("https://api.ip.sb/geoip")
 	if err != nil {
 		log.Println("get location failed")
@@ -219,17 +224,65 @@ func getMacAddrs() (macAddrs []string) {
 	return macAddrs
 }
 func isBind() (bool) {
-	if ! PathExist(CAFILE) {
+	if ! tools.PathExist(CAFILE) {
 		return false
 	}
-	if ! PathExist(KEYFILE) {
+	if ! tools.PathExist(KEYFILE) {
 		return false
 	}
-	if ! PathExist(CERTFILE) {
+	if ! tools.PathExist(CERTFILE) {
 		return false
 	}
-	if ! PathExist(NODEDB) {
+	if ! tools.PathExist(NODEDB) {
 		return false
 	}
 	return true
+}
+
+func CleanBcode() {
+	os.OpenFile("/dev/tty0", os.O_WRONLY|os.O_APPEND, 620)
+	if tools.PathExist(CAFILE) {
+		os.Remove(CAFILE)
+	}
+	if tools.PathExist(KEYFILE) {
+		os.Remove(KEYFILE)
+	}
+	if tools.PathExist(CERTFILE) {
+		os.Remove(CERTFILE)
+	}
+	if tools.PathExist(NODEDB) {
+		f, _ := os.OpenFile(NODEDB, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		f.Close()
+	}
+}
+func Gen() (string) {
+	prompt:=`
+
+
+Verification code:
+
+--------------------------------------------------
+
+%s
+
+--------------------------------------------------
+
+`
+	rand.Seed(time.Now().UnixNano())
+	var letterRunes = []byte("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	var b  =make([]byte,8)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	f,err:=os.OpenFile("/dev/tty0", os.O_WRONLY|os.O_APPEND, 620)
+	if err != nil {
+		log.Printf("open /dev/tty0 fail: %s",err)
+		return ""
+	}
+	_,err=f.Write([]byte(fmt.Sprintf(prompt,string(b))))
+	if err != nil {
+		log.Printf("open /dev/tty0 fail: %s",err)
+		return ""
+	}
+	return string(b)
 }

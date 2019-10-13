@@ -4,12 +4,12 @@
 Install(){
     LATEST_URL="https://api.github.com/repos/qinghon/BonusManger/releases/latest"
 
-    RELEAST_INFO=$(curl -fsSL $LATEST_URL)
+    RELEAST_INFO=$(curl -fsSL "$LATEST_URL")
 
-    TAG=$(echo $RELEAST_INFO|grep -Po '"tag_name": "\K.*?(?=")')
+    TAG=$(echo "$RELEAST_INFO"|grep -Po '"tag_name": "\K.*?(?=")')
     DOWNLOAD_URL="https://github.com/qinghon/BonusManger/releases/download/$TAG/bonus_manger_$(uname -m)"
     mkdir -p /opt/BonusManger/bin/
-    wget -O /opt/BonusManger/bin/bonusmanger $DOWNLOAD_URL
+    wget -O /opt/BonusManger/bin/bonusmanger "$DOWNLOAD_URL"
     chmod +x /opt/BonusManger/bin/bonusmanger
     cat <<EOF >/lib/systemd/system/bonus_manger.service
 [Unit]

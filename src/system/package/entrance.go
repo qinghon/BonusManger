@@ -7,19 +7,19 @@ import (
 
 var PACKAGE_MANGER string
 
-func Check_exec(exe string) (bool) {
+func CheckExec(exe string) (bool) {
 	_, err := exec.LookPath(exe)
 	return err == nil
 }
 
-func Check_manger() {
-	if Check_exec("apt") {
+func checkManger() {
+	if CheckExec("apt") {
 		PACKAGE_MANGER = "apt"
-	} else if Check_exec("yum") {
+	} else if CheckExec("yum") {
 		PACKAGE_MANGER = "yum"
-	} else if Check_exec("apk") {
+	} else if CheckExec("apk") {
 		PACKAGE_MANGER = "apk"
-	} else if Check_exec("opkg") {
+	} else if CheckExec("opkg") {
 		PACKAGE_MANGER = "opkg"
 	} else {
 		PACKAGE_MANGER = ""
@@ -27,7 +27,7 @@ func Check_manger() {
 }
 
 func Install(p string) ([]byte, error) {
-	Check_manger()
+	checkManger()
 	switch PACKAGE_MANGER {
 	case "apt":
 		_,err:=AptInstall(p)

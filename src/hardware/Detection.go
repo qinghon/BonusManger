@@ -55,9 +55,6 @@ type Mount struct {
 	Options    string `json:"options"`
 }
 
-const (
-	DefaultBufferSize = 1024
-)
 
 func ReadMounts(path string) (*Mounts, error) {
 	fin, err := os.Open(path)

@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
+	"system/tools"
 	"time"
 )
 
@@ -20,7 +20,7 @@ const VersionURLS = "https://github.com/qinghon/BonusManger/releases/download/%s
 
 const GetClient = "https://github.com/qinghon/BonusManger/releases/download/%s/bonus_manger_%s"
 const Bxc_node_URL = "https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
-const Bxc_node_sercice = `
+const Bxc_node_service = `
 [Unit]
 Description=bxc node app
 After=network.target
@@ -37,10 +37,10 @@ WantedBy=multi-user.target
 const Github_latest = "https://api.github.com/repos/qinghon/BonusManger/releases/latest"
 
 var ARCH string
-var last_release Release_latest
+var last_release releaseLatest
 
 /*  Auto Generated*/
-type Release_latest struct {
+type releaseLatest struct {
 	URL             string `json:"url"`
 	AssetsURL       string `json:"assets_url"`
 	UploadURL       string `json:"upload_url"`
@@ -115,7 +115,7 @@ type Release_latest struct {
 
 func onboot() {
 	go Set_arch()
-	if !Don_ins_node {
+	if !DonInsNode {
 		go check_node()
 	} else {
 		log.Println("not install as command flag")
@@ -134,7 +134,7 @@ func onboot() {
 }
 func check_version() (string, bool) {
 	var err error
-	last_release, err = Get_latest_info()
+	last_release, err = getLatestInfo()
 	if err != nil {
 		log.Printf("get tag info fail:%s", err)
 		return "", false
@@ -190,20 +190,20 @@ func check_and_update() {
 	//log.Println(md5sum)
 	if need_update {
 		log.Printf("we need update to %s,new client md5sum: %s", last_release.TagName, md5sum)
-		Down_new_client(md5sum)
+		down_new_client(md5sum)
 	} else {
 		log.Println("don't need update")
 	}
 }
 
-func Down_new_client(md5sum string) {
+func down_new_client(md5sum string) {
 	down_path := "/tmp/bouns_manger"
-	err := Download_file(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
+	err := DownloadFile(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
 	if err != nil {
 		log.Printf("Download new client fail: %s", err)
 	}
 	if md5sum == "" {
-		err = Copyfile_force(os.Args[0], down_path)
+		err = CopyfileForce(os.Args[0], down_path)
 		if err != nil {
 			log.Printf("Copy to %s failed:%s", os.Args[0], err)
 		}
@@ -213,7 +213,7 @@ func Down_new_client(md5sum string) {
 			log.Printf("down load file md5sum:%s not equal get file md5sum:%s", down_ed_md5, md5sum)
 			return
 		} else {
-			err = Copyfile_force(os.Args[0], down_path)
+			err = CopyfileForce(os.Args[0], down_path)
 		}
 	}
 	if err := os.Chmod(os.Args[0], 0755); err != nil {
@@ -235,7 +235,7 @@ func check_node() error {
 		log.Printf("mkdir  /opt/bcloud/nodeapi/ fail: %s", err)
 		return err
 	}
-	Download_file(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
+	DownloadFile(fmt.Sprintf(Bxc_node_URL, ARCH), "/opt/bcloud/nodeapi/node")
 	err = os.Chmod("/opt/bcloud/nodeapi/node", 0755)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func check_node() error {
 	if err != nil {
 		return err
 	}
-	ioutil.WriteFile("/lib/systemd/system/bxc-node.service", []byte(Bxc_node_sercice), 0644)
+	ioutil.WriteFile("/lib/systemd/system/bxc-node.service", []byte(Bxc_node_service), 0644)
 	if err != nil {
 		return err
 	}
@@ -266,19 +266,7 @@ func Getfilemd5(_path string) string {
 	return fmt.Sprintf("%x", hashstr)
 }
 
-/*获取当前文件执行的路径*/
-func GetCurPath() string {
-	file, _ := exec.LookPath(os.Args[0])
-
-	//得到全路径，比如在windows下E:\\golang\\test\\a.exe
-	path, _ := filepath.Abs(file)
-
-	rst := filepath.Dir(path)
-
-	return rst
-}
-
-func Download_file(_URL, _path string) error {
+func DownloadFile(_URL, _path string) error {
 	resp, err := http.Get(_URL)
 	if err != nil {
 		log.Printf("get file error:%s ,url: %s", err, _URL)
@@ -299,7 +287,7 @@ func Download_file(_URL, _path string) error {
 	return nil
 }
 
-func Copyfile_force(dstName, srcName string) error {
+func CopyfileForce(dstName, srcName string) error {
 	//log.Println("cp", "-f", srcName, dstName)
 	//cmd := exec.Command("cp", "-f", srcName, dstName)
 	//err := cmd.Start()
@@ -307,7 +295,7 @@ func Copyfile_force(dstName, srcName string) error {
 	//	return err
 	//}
 
-	return Run_command(fmt.Sprintf("cp -f %s %s", srcName, dstName))
+	return tools.RunCommand(fmt.Sprintf("cp -f %s %s", srcName, dstName))
 	//return nil
 }
 func Set_arch() {
@@ -322,27 +310,19 @@ func Set_arch() {
 	log.Printf("check device arch is: %s", ARCH)
 }
 
-func Run_command(cmd_str string) error {
-	cmd := exec.Command("sh", "-c", cmd_str)
-	log.Printf("sh -c %s", cmd_str)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Wait()
-}
-func Get_latest_info() (Release_latest, error) {
+func getLatestInfo() (releaseLatest, error) {
 	resp, err := http.Get(Github_latest)
 	if err != nil {
 		log.Printf("get latest tag fail: %s", err)
-		return Release_latest{}, err
+		return releaseLatest{}, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	var release Release_latest
+	var release releaseLatest
 	err = json.Unmarshal(body, &release)
 	if err != nil {
 		log.Printf("Unmarshal fail: %s", err)
-		return Release_latest{}, err
+		return releaseLatest{}, err
 	}
 	last_release = release
 	return release, nil

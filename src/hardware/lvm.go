@@ -58,7 +58,7 @@ type Lv struct {
 }
 
 func install_lvm() ([]byte, error) {
-	if ! _package.Check_exec("lvs") {
+	if ! _package.CheckExec("lvs") {
 		return _package.Install("lvm2")
 	} else {
 		return nil, nil
@@ -134,7 +134,7 @@ func RemoveVg(vg Vg) (VG, error) {
 	if err != nil {
 		return VG{}, err
 	}
-	tmp := []Lv{}
+	var tmp []Lv
 	for _, lv := range lvs.Report[0].Lv {
 		if lv.VgName == vg.VgName {
 			tmp = append(tmp, lv)
