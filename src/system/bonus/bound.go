@@ -2,15 +2,11 @@ package bonus
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
-	"os"
 	"system/tools"
-	"time"
 )
 
 const NODEDB = "/opt/bcloud/node.db"
@@ -223,39 +219,23 @@ func getMacAddrs() (macAddrs []string) {
 	}
 	return macAddrs
 }
-func isBind() (bool) {
-	if ! tools.PathExist(CAFILE) {
+func isBind() bool {
+	if !tools.PathExist(CAFILE) {
 		return false
 	}
-	if ! tools.PathExist(KEYFILE) {
+	if !tools.PathExist(KEYFILE) {
 		return false
 	}
-	if ! tools.PathExist(CERTFILE) {
+	if !tools.PathExist(CERTFILE) {
 		return false
 	}
-	if ! tools.PathExist(NODEDB) {
+	if !tools.PathExist(NODEDB) {
 		return false
 	}
 	return true
 }
 
-func CleanBcode() {
-	os.OpenFile("/dev/tty0", os.O_WRONLY|os.O_APPEND, 620)
-	if tools.PathExist(CAFILE) {
-		os.Remove(CAFILE)
-	}
-	if tools.PathExist(KEYFILE) {
-		os.Remove(KEYFILE)
-	}
-	if tools.PathExist(CERTFILE) {
-		os.Remove(CERTFILE)
-	}
-	if tools.PathExist(NODEDB) {
-		f, _ := os.OpenFile(NODEDB, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-		f.Close()
-	}
-}
-func Gen() (string) {
+/*func Gen() (string) {
 	prompt:=`
 
 
@@ -285,4 +265,4 @@ Verification code:
 		return ""
 	}
 	return string(b)
-}
+}*/

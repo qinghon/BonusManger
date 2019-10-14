@@ -31,8 +31,10 @@ docker-amd64: build-amd64
 	docker build -f 'docker/Dockerfile' -t  bonusmanger:latest .
 
 docker-aarch64: build-aarch64
-	docker -H tcp://node1.lan build -f 'docker/Dockerfile_aarch64' -t  bonusmanger:latest .
+	docker build -f 'docker/Dockerfile_aarch64' -t  bonusmanger:latest .
 
+docker-arm: build-arm
+	docker build -f 'docker/Dockerfile_aarch64' -t  bonusmanger:latest .
 
 
 clean:
