@@ -3,9 +3,9 @@ package hardware
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/qinghon/system/package"
 	"os/exec"
 	"syscall"
-	"system/package"
 )
 
 type PV struct {
@@ -58,7 +58,7 @@ type Lv struct {
 }
 
 func install_lvm() ([]byte, error) {
-	if ! _package.CheckExec("lvs") {
+	if !_package.CheckExec("lvs") {
 		return _package.Install("lvm2")
 	} else {
 		return nil, nil
@@ -179,15 +179,15 @@ func CreateLv(lv Lv) (LV, error) {
 }
 
 func RemoveLv(lv []Lv) (LV, error) {
-	mts,err:=ReadMounts("/proc/mounts")
+	mts, err := ReadMounts("/proc/mounts")
 	if err != nil {
 		return LV{}, err
 	}
 
 	for _, l := range lv {
-		for _,m:=range mts.Mounts {
-			if fmt.Sprintf("/dev/%s-%s", l.VgName, l.LvName) ==m.Device {
-				if err:=Umount(m.MountPoint);err!=nil{
+		for _, m := range mts.Mounts {
+			if fmt.Sprintf("/dev/%s-%s", l.VgName, l.LvName) == m.Device {
+				if err := Umount(m.MountPoint); err != nil {
 					return LV{}, err
 				}
 			}
@@ -201,7 +201,7 @@ func RemoveLv(lv []Lv) (LV, error) {
 	return GetLv()
 }
 
-func Umount(dev string) (error) {
+func Umount(dev string) error {
 	// dev: /mnt is mounted point
 	return syscall.Unmount(dev, 0)
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"github.com/qinghon/system/tools"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"system/tools"
 	"time"
 )
 
