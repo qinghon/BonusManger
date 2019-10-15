@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/qinghon/system/tools"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"system/tools"
 )
 
 type PppConf struct {
@@ -111,6 +111,7 @@ provider %s
 	}
 	return nil
 }
+
 /*func delppp_auto(name string) {
 	// name : dsl file name //todo 删除interfaces文件中的自启动拨号
 
@@ -124,7 +125,6 @@ func RunPpp(p PppoeAccount) ([]byte, error) {
 	//}
 	return cmd.Output()
 }
-
 
 func KillPpp(name string) error {
 	return tools.RunCommand(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`", name))
