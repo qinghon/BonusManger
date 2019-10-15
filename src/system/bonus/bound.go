@@ -1,11 +1,15 @@
 package bonus
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"network"
+	"os"
 	"system/tools"
 )
 
@@ -233,6 +237,56 @@ func isBind() bool {
 		return false
 	}
 	return true
+}
+func ReadClientBcode(crt string) (string, error) {
+	//if _,err:=ReadNodedb();err==nil {
+	//	return "", os.ErrExist
+	//}
+	by, err := ioutil.ReadFile(crt)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(by)
+	var cert *x509.Certificate
+	cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	//rsapub := cert.PublicKey.(*rsa.PublicKey)
+	//log.Println(rsapub)
+	log.Println(cert.Subject.CommonName)
+	return cert.Subject.CommonName, nil
+}
+func ReadBcode() (string, error) {
+	if !tools.PathExist(CERTFILE) {
+		return "", os.ErrNotExist
+	}
+	CN, err := ReadClientBcode(CERTFILE)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("read CN: %s", CN)
+	bcode := string([]rune(CN)[:41])
+	return bcode, nil
+}
+func ReadNodedb() (SendData, error) {
+	if !network.PathExist(NODEDB) {
+		return SendData{}, os.ErrNotExist
+	}
+	bt, err := ioutil.ReadFile("/opt/bcloud/node.db")
+	if err != nil {
+		log.Printf("get node.db fail: %s", err)
+		return SendData{}, err
+	}
+	var node SendData
+	if err := json.Unmarshal(bt, &node); err != nil {
+		log.Printf("Unmarshalb node.db error: %s", err)
+	}
+	if node.Email == "" || node.Bcode == "" {
+		return node, os.ErrInvalid
+	}
+	return node, nil
+
 }
 
 /*func Gen() (string) {

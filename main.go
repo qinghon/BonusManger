@@ -15,10 +15,11 @@ import (
 	"network"
 	"os"
 	"os/exec"
+	"system/bonus"
 	"time"
 )
 
-const Version = "v0.3.8"
+const Version = "v0.3.9"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -72,7 +73,7 @@ func main() {
 	e.GET("/net", getNet)
 	e.PATCH("/net", applyNet)
 	e.PUT("/net", setNet)
-
+	e.POST("/bonus/repair", repair)
 	e.POST("/update", update)
 	e.GET("/v", getVersion)
 	e.Run(":9018")
@@ -82,7 +83,7 @@ func main() {
 func Init() {
 	flag.BoolVar(&DonInsNode, "D", false, "Don install bxc-node")
 	flag.BoolVar(&Don_update, "U", false, "Don check update")
-	var v=flag.Bool("V",false,"show version")
+	var v = flag.Bool("V", false, "show version")
 	flag.Parse()
 	if *v {
 		showVersion()
@@ -130,7 +131,7 @@ func getStatusDetail(c *gin.Context) {
 		} else {
 			var node nodedb
 			if err := json.Unmarshal(bt, &node); err != nil {
-				log.Printf("Unmarshal node.db error: %s", err)
+				log.Printf("Unmarshalb node.db error: %s", err)
 			} else {
 				detail.Bcode = node.Bcode
 				detail.Email = node.Email
@@ -341,6 +342,38 @@ func getVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"version": Version, "md5sum": md5sumLocal})
 }
 
+func repair(c *gin.Context) {
+	if _, err := bonus.ReadNodedb(); err == nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, "证书及描述文件已存在"})
+		return
+	}
+	var db nodedb
+	if err := c.ShouldBindJSON(&db); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve file false"})
+		return
+	}
+	if db.Email == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "email or bcode is null"})
+		return
+	}
+	bcode, err := bonus.ReadBcode()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("read bcode error:%s", err)})
+		return
+	}
+	db.Bcode = bcode
+	js, err := json.Marshal(map[string]string{"bcode": db.Bcode, "email": db.Email})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, "json encode fail"})
+		return
+	}
+	if err := ioutil.WriteFile(bonus.NODEDB, js, 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, "write fail"})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+	}
+}
 func GET(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
