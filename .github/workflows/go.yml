@@ -2,10 +2,10 @@ name: Go
 on:
   push:
     branches:
-    - master
-    - release/*
+      - master
+      - release/*
     tags:
-    - v0.*
+      - v0.*
 jobs:
 
   build:
