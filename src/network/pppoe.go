@@ -68,6 +68,7 @@ func Setppp(p PppoeAccount) error {
 	if err != nil {
 		return err
 	}
+	defer fs.Close()
 	conf_str := strings.Join(p.Conf.Other, "\n")
 	conf_str += fmt.Sprintf("\nuser \"%s\"", p.Username)
 	conf_str += fmt.Sprintf("\nnic-%s", p.Conf.Interface)
@@ -91,10 +92,12 @@ func Setppp(p PppoeAccount) error {
 
 func setpppAuto(p PppoeAccount) error {
 	inface := fmt.Sprintf(`
+
 auto %s
 iface %s inet ppp
 pre-up /bin/ip link set %s up  # line maintained by bonusmanger
-provider %s
+provider %s 
+
 `, p.Name, p.Name, p.Conf.Interface, p.Name)
 	by, err := ioutil.ReadFile("/etc/network/interfaces")
 	if strings.Contains(string(by), fmt.Sprintf("auto %s", p.Name)) {
