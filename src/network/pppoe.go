@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/qinghon/system/tools"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"system/tools"
 )
 
 type PppConf struct {
@@ -68,6 +68,7 @@ func Setppp(p PppoeAccount) error {
 	if err != nil {
 		return err
 	}
+	defer fs.Close()
 	conf_str := strings.Join(p.Conf.Other, "\n")
 	conf_str += fmt.Sprintf("\nuser \"%s\"", p.Username)
 	conf_str += fmt.Sprintf("\nnic-%s", p.Conf.Interface)
@@ -91,10 +92,12 @@ func Setppp(p PppoeAccount) error {
 
 func setpppAuto(p PppoeAccount) error {
 	inface := fmt.Sprintf(`
+
 auto %s
 iface %s inet ppp
 pre-up /bin/ip link set %s up  # line maintained by bonusmanger
-provider %s
+provider %s 
+
 `, p.Name, p.Name, p.Conf.Interface, p.Name)
 	by, err := ioutil.ReadFile("/etc/network/interfaces")
 	if strings.Contains(string(by), fmt.Sprintf("auto %s", p.Name)) {
@@ -111,6 +114,7 @@ provider %s
 	}
 	return nil
 }
+
 /*func delppp_auto(name string) {
 	// name : dsl file name //todo 删除interfaces文件中的自启动拨号
 
@@ -124,7 +128,6 @@ func RunPpp(p PppoeAccount) ([]byte, error) {
 	//}
 	return cmd.Output()
 }
-
 
 func KillPpp(name string) error {
 	return tools.RunCommand(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`", name))

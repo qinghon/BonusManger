@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"hardware"
+	"github.com/qinghon/hardware"
+	"github.com/qinghon/network"
+	"github.com/qinghon/system/bonus"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"network"
 	"os"
 	"os/exec"
-	"system/bonus"
 	"time"
 )
 
@@ -75,6 +75,7 @@ func main() {
 	e.PUT("/net", setNet)
 	e.POST("/bonus/repair", repair)
 	e.POST("/update", update)
+	//e.GET("/system/log",getLog)
 	e.GET("/v", getVersion)
 	e.Run(":9018")
 
@@ -390,6 +391,14 @@ func GET(url string) ([]byte, error) {
 
 }
 
+//func getLog(c *gin.Context) {
+//	by,err:=readlog.ReadSyslog()
+//	if err != nil {
+//		c.JSON(http.StatusInternalServerError,
+//			Message{http.StatusInternalServerError,fmt.Sprintf("read syslog fail: %s",err)})
+//	}
+//	c.Data(http.StatusOK,"text/txt",by)
+//}
 func showVersion() {
 	fmt.Print(Version)
 	os.Exit(0)
