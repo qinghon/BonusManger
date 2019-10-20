@@ -36,3 +36,9 @@ func PathExist(_path string) bool {
 	return true
 }
 
+func Shutdown() error {
+	return RunCommand("shutdown now")
+}
+func Reboot() error {
+	return RunCommand("reboot")
+}

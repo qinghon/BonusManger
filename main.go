@@ -9,6 +9,7 @@ import (
 	"github.com/qinghon/hardware"
 	"github.com/qinghon/network"
 	"github.com/qinghon/system/bonus"
+	"github.com/qinghon/system/tools"
 	"io/ioutil"
 	"log"
 	"net"
@@ -76,6 +77,11 @@ func main() {
 	e.POST("/bonus/repair", repair)
 	e.POST("/update", update)
 	//e.GET("/system/log",getLog)
+	tool := e.Group("/tools")
+	{
+		tool.GET("/reboot", reboot)
+		tool.GET("/shutdown", shutdown)
+	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
 
@@ -91,25 +97,25 @@ func Init() {
 	}
 }
 
-/*// Transparent 透传至官方客户端
+/*// transparent 透传至官方客户端
 func tp_discovery(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
+	transparent("127.0.0.1:9017", c)
 }
 func tp_status(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
+	transparent("127.0.0.1:9017", c)
 }
 func tp_bound(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
+	transparent("127.0.0.1:9017", c)
 }
 func tp_disk(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
+	transparent("127.0.0.1:9017", c)
 }*/
-/* Transparent 透传至官方客户端 */
+/* transparent 透传至官方客户端 */
 func tpAll(c *gin.Context) {
-	Transparent("127.0.0.1:9017", c)
+	transparent("127.0.0.1:9017", c)
 }
 
-func Transparent(target string, c *gin.Context) {
+func transparent(target string, c *gin.Context) {
 	// target: target ip:port
 	t := c.Request.URL
 	t.Host = target
@@ -399,6 +405,23 @@ func GET(url string) ([]byte, error) {
 //	}
 //	c.Data(http.StatusOK,"text/txt",by)
 //}
+
+func shutdown(c *gin.Context) {
+	if err := tools.Shutdown(); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("shutdown fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+	}
+}
+func reboot(c *gin.Context) {
+	if err := tools.Reboot(); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("reboot fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+	}
+}
 func showVersion() {
 	fmt.Print(Version)
 	os.Exit(0)
