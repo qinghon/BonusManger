@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const Version = "v0.3.9"
+const Version = "v0.3.10"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -57,13 +57,31 @@ func main() {
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
 	e.GET("/status", tpAll)
+	status := e.Group("/status")
+	{
+		status.GET("/detail", getStatusDetail)
+	}
 	e.POST("/bound", tpAll)
 	e.POST("/disk", tpAll)
 	disk := e.Group("/disk")
-	disk.GET("/all", getDiskAll)
+	{
+		disk.GET("/all", getDiskAll)
+		lvm := disk.Group("/lvm")
+		{
+			lvm.GET("/lv", getLv)
+			lvm.POST("/lv")
+			lvm.DELETE("/lv/:name")
+
+			lvm.GET("/vg", getVg)
+			lvm.POST("/vg")
+			lvm.DELETE("/vg/:name")
+
+			lvm.GET("/pv", getPv)
+			lvm.POST("/pv")
+			lvm.DELETE("/pv/:name")
+		}
+	}
 	e.GET("/version", tpAll)
-	status := e.Group("/status")
-	status.GET("/detail", getStatusDetail)
 
 	e.GET("/pppoe", getPpp)
 	e.POST("/pppoe", setPpp)
@@ -395,6 +413,34 @@ func GET(url string) ([]byte, error) {
 	}
 	return body, nil
 
+}
+
+func getLv(c *gin.Context) {
+	lv, err := hardware.GetLv()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("get lv error: %s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, lv.Report[0].Lv)
+}
+func getPv(c *gin.Context) {
+	pv, err := hardware.GetPv()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("get pv error: %s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, pv.Report[0].Pv)
+}
+func getVg(c *gin.Context) {
+	vg, err := hardware.GetVg()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("get vg error: %s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, vg.Report[0].Vg)
 }
 
 //func getLog(c *gin.Context) {
