@@ -205,3 +205,17 @@ func Umount(dev string) error {
 	// dev: /mnt is mounted point
 	return syscall.Unmount(dev, 0)
 }
+func UmountDev(dev string) error {
+	mts, err := ReadMounts("/proc/mounts")
+	if err != nil {
+		return err
+	}
+	for _, m := range mts.Mounts {
+		if fmt.Sprintf("/dev/%s", dev) == m.Device {
+			if err := Umount(m.MountPoint); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

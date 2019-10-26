@@ -57,6 +57,7 @@ func main() {
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
 	e.GET("/status", tpAll)
+	e.GET("/version", tpAll)
 	status := e.Group("/status")
 	{
 		status.GET("/detail", getStatusDetail)
@@ -66,6 +67,13 @@ func main() {
 	disk := e.Group("/disk")
 	{
 		disk.GET("/all", getDiskAll)
+		disk.POST("/umount/:part", umountPart)
+		native := disk.Group("/native")
+		{
+			native.GET("/:device", middleDiskNative, getDiskNative)
+			native.POST("/:device", middleDiskNative, setDiskNative)
+			native.DELETE("/:device/:part", middleDiskNative, delDiskNativePart)
+		}
 		lvm := disk.Group("/lvm")
 		{
 			lvm.GET("/lv", getLv)
@@ -81,7 +89,6 @@ func main() {
 			lvm.DELETE("/pv/:name")
 		}
 	}
-	e.GET("/version", tpAll)
 
 	e.GET("/pppoe", getPpp)
 	e.POST("/pppoe", setPpp)
@@ -443,14 +450,68 @@ func getVg(c *gin.Context) {
 	c.JSON(http.StatusOK, vg.Report[0].Vg)
 }
 
-//func getLog(c *gin.Context) {
-//	by,err:=readlog.ReadSyslog()
-//	if err != nil {
-//		c.JSON(http.StatusInternalServerError,
-//			Message{http.StatusInternalServerError,fmt.Sprintf("read syslog fail: %s",err)})
-//	}
-//	c.Data(http.StatusOK,"text/txt",by)
-//}
+func middleDiskNative(c *gin.Context) {
+	d := c.Param("device")
+	if d == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "not get empty device"})
+		return
+	}
+	c.Next()
+}
+func getDiskNative(c *gin.Context) {
+	d := c.Param("device")
+	disk, err := hardware.DiskInfo(d)
+	log.Println(disk.Table)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("get disk info fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, disk)
+	}
+}
+func setDiskNative(c *gin.Context) {
+	d := c.Param("device")
+	disk, err := hardware.DiskInfo(d)
+	var p hardware.Partition
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "params not true"})
+		return
+	}
+	by, err := disk.CreatePart(p)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("create partition fail: %s", by)})
+	}
+	disk, err = hardware.DiskInfo(d)
+	c.JSON(http.StatusOK, disk)
+}
+func delDiskNativePart(c *gin.Context) {
+	var disk hardware.Dev
+	d := c.Param("device")
+	disk.Name = d
+	p := c.Param("part") // It's number
+	if p == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "not get partition"})
+		return
+	}
+	by, err := disk.DeletePart(p)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("delete partition fail: %s", by)})
+	}
+	disk, err = hardware.DiskInfo(d)
+	c.JSON(http.StatusOK, disk)
+}
+func umountPart(c *gin.Context) {
+	p := c.Param("part") //It's part name like: sda1
+	if p == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "not get partition"})
+	}
+	if err := hardware.UmountDev(p); err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("umount part fail:%s", err)})
+	}
+}
 
 func shutdown(c *gin.Context) {
 	if err := tools.Shutdown(); err != nil {
@@ -461,6 +522,10 @@ func shutdown(c *gin.Context) {
 	}
 }
 func reboot(c *gin.Context) {
+	//go func() {
+	//	time.Sleep(time.Second*5)
+	//	syscall.Reboot(0)
+	//}()
 	if err := tools.Reboot(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("reboot fail:%s", err)})

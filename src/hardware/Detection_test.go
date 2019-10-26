@@ -22,3 +22,7 @@ func Test_ReadMounts(t *testing.T) {
 	js, _ := json.Marshal(mo)
 	fmt.Println(string(js))
 }
+func Test_Mount(t *testing.T) {
+	p := Partition{"sdc1", "", "", "ext4", ""}
+	t.Log(p.Mount("/tmp/sdc1"))
+}
