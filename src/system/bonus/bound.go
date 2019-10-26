@@ -273,7 +273,7 @@ func ReadNodedb() (SendData, error) {
 	if !network.PathExist(NODEDB) {
 		return SendData{}, os.ErrNotExist
 	}
-	bt, err := ioutil.ReadFile("/opt/bcloud/node.db")
+	bt, err := ioutil.ReadFile(NODEDB)
 	if err != nil {
 		log.Printf("get node.db fail: %s", err)
 		return SendData{}, err

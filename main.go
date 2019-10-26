@@ -156,8 +156,8 @@ func transparent(target string, c *gin.Context) {
 func getStatusDetail(c *gin.Context) {
 	//var err error
 	var detail StatusDetail
-	if network.PathExist("/opt/bcloud/node.db") {
-		bt, err := ioutil.ReadFile("/opt/bcloud/node.db")
+	if network.PathExist(bonus.NODEDB) {
+		bt, err := ioutil.ReadFile(bonus.NODEDB)
 		if err != nil {
 			log.Printf("get node.db fail: %s", err)
 		} else {

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"github.com/qinghon/system/bonus"
 	"github.com/qinghon/system/tools"
 	"io"
 	"io/ioutil"
@@ -240,9 +241,11 @@ func check_node() error {
 	if err != nil {
 		return err
 	}
-	_, err = os.Create("/opt/bcloud/node.db")
-	if err != nil {
-		return err
+	if !tools.PathExist(bonus.NODEDB) {
+		_, err = os.Create(bonus.NODEDB)
+		if err != nil {
+			return err
+		}
 	}
 	ioutil.WriteFile("/lib/systemd/system/bxc-node.service", []byte(Bxc_node_service), 0644)
 	if err != nil {
