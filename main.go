@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const Version = "v0.3.10"
+const Version = "v0.3.11"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -37,7 +37,7 @@ type StatusDetail struct {
 
 // Unmarshal used
 type nodedb struct {
-	Bcode      string `json:"bcode"`
+	Bcode      string `json:"bcode" binding:"required"`
 	Email      string `json:"email"`
 	Macaddress string `json:"macaddress"`
 }
@@ -68,6 +68,7 @@ func main() {
 	{
 		disk.GET("/all", getDiskAll)
 		disk.POST("/umount/:part", umountPart)
+		disk.POST("/format", formatPart)
 		native := disk.Group("/native")
 		{
 			native.GET("/:device", middleDiskNative, getDiskNative)
@@ -78,14 +79,14 @@ func main() {
 		{
 			lvm.GET("/lv", getLv)
 			lvm.POST("/lv")
-			lvm.DELETE("/lv/:name")
+			lvm.DELETE("/lv", delLv)
 
 			lvm.GET("/vg", getVg)
-			lvm.POST("/vg")
-			lvm.DELETE("/vg/:name")
+			lvm.POST("/vg", createVg)
+			lvm.DELETE("/vg/:name", delVg)
 
 			lvm.GET("/pv", getPv)
-			lvm.POST("/pv")
+			lvm.POST("/pv", createPv)
 			lvm.DELETE("/pv/:name")
 		}
 	}
@@ -422,6 +423,25 @@ func GET(url string) ([]byte, error) {
 
 }
 
+func formatPart(c *gin.Context) {
+	var form struct {
+		Dev  string `json:"dev" binding:"required"`
+		Type string `json:"type" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&form); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("Wrong parameter: %s ", err)})
+	}
+	var p hardware.Partition
+	p.Name = form.Dev
+	by, err := p.Format(form.Dev)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("Format part % fail:%s;%s", form.Dev, err, string(by))})
+	} else {
+		c.JSON(http.StatusOK, "OK")
+	}
+}
 func getLv(c *gin.Context) {
 	lv, err := hardware.GetLv()
 	if err != nil {
@@ -431,6 +451,25 @@ func getLv(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, lv.Report[0].Lv)
 }
+func delLv(c *gin.Context) {
+	vg := c.Query("vg")
+	lv := c.Query("lv")
+	if vg == "" || lv == "" {
+		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "not get vg name or lv name"})
+		return
+	}
+	var lvs hardware.Lv
+	lvs.LvName = lv
+	lvs.VgName = vg
+	lvinfo, err := hardware.RemoveLv([]hardware.Lv{lvs})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("delete lv fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, lvinfo)
+	}
+}
+
 func getPv(c *gin.Context) {
 	pv, err := hardware.GetPv()
 	if err != nil {
@@ -440,6 +479,36 @@ func getPv(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, pv.Report[0].Pv)
 }
+func createPv(c *gin.Context) {
+	var formPv struct {
+		PvName string `json:"pv_name"` //device name
+		VgName string `json:"vg_name"`
+	}
+	if err := c.ShouldBindJSON(&formPv); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("Wrong parameter: %s ", err)})
+	}
+	_, err := hardware.CreatePV(formPv.PvName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("Create vg fail:%s", err)})
+	}
+	if formPv.VgName == "" {
+		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+		return
+	}
+	vginfo, err := hardware.ExtendVg(formPv.PvName, formPv.VgName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("extend vg fail:%s ,but format pv success", err)})
+	} else {
+		c.JSON(http.StatusOK, vginfo)
+	}
+}
+
+/*func reducePv(c *gin.Context) {
+
+}*/
 func getVg(c *gin.Context) {
 	vg, err := hardware.GetVg()
 	if err != nil {
@@ -448,6 +517,39 @@ func getVg(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, vg.Report[0].Vg)
+}
+func createVg(c *gin.Context) {
+	var vg struct {
+		VgName string   `json:"vg_name" binding:"required"`
+		PvName []string `json:"pv_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&vg); err != nil || vg.PvName == nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("Wrong parameter: %s ", err)})
+	}
+	vginfo, err := hardware.CreateVg(vg.VgName, vg.PvName...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("Create vg fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, vginfo)
+	}
+}
+func delVg(c *gin.Context) {
+	vg := c.Param("name")
+	if vg == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "not get empty device"})
+		return
+	}
+	var Vg hardware.Vg
+	Vg.VgName = vg
+	vginfo, err := hardware.RemoveVg(Vg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("delete vg fail:%s", err)})
+	} else {
+		c.JSON(http.StatusOK, vginfo)
+	}
 }
 
 func middleDiskNative(c *gin.Context) {

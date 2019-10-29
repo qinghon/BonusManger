@@ -128,7 +128,22 @@ func CreateVg(VgName string, dev ...string) (VG, error) {
 	}
 	return GetVg()
 }
-
+func ExtendVg(PvName, VgName string) (VG, error) {
+	cmd := exec.Command("pvextend", VgName, PvName)
+	_, err := cmd.Output()
+	if err != nil {
+		return VG{}, err
+	}
+	return GetVg()
+}
+func ReduceVg(PvName, VgName string) (VG, error) {
+	cmd := exec.Command("pvreduce", VgName, PvName)
+	_, err := cmd.Output()
+	if err != nil {
+		return VG{}, err
+	}
+	return GetVg()
+}
 func RemoveVg(vg Vg) (VG, error) {
 	lvs, err := GetLv() //clean lv begain
 	if err != nil {
