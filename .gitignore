@@ -1,3 +1,4 @@
 build/
 node*
 .idea
+go.sum

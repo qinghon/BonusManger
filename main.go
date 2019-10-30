@@ -107,6 +107,7 @@ func main() {
 	{
 		tool.GET("/reboot", reboot)
 		tool.GET("/shutdown", shutdown)
+		tool.POST("/ssh", openssh)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
@@ -635,6 +636,46 @@ func reboot(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
+func openssh(c *gin.Context) {
+	var k tools.Key
+	if err := c.ShouldBindJSON(&k); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "params not true"})
+		return
+	}
+	clip := c.ClientIP()
+	ipt := net.ParseIP(clip)
+	var isPrivate bool
+	netcard := network.GetNetworkCard()
+	if len(netcard) == 0 {
+		isPrivate = false
+	}
+	for _, c := range netcard {
+		for _, n := range c.Ip {
+			_, tmp, err := net.ParseCIDR(n)
+			if err != nil {
+				continue
+			}
+			if tmp.Contains(ipt) {
+				isPrivate = true
+				break
+			}
+		}
+	}
+	if !isPrivate {
+		c.JSON(http.StatusForbidden, Message{http.StatusForbidden,
+			"you need in private network set this"})
+	}
+	if len(k.PublicKey) == 0 {
+		k.GenKey(2048)
+	}
+	if err := k.Trust(); err != nil {
+		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Trust ssh fail: %s", err))
+	} else {
+		c.JSON(http.StatusOK, k)
+	}
+	k.PrivateKey = ""
+}
+
 func showVersion() {
 	fmt.Print(Version)
 	os.Exit(0)
