@@ -43,10 +43,10 @@ type LV struct {
 	} `json:"report"`
 }
 type Lv struct {
-	LvName          string `json:"lv_name"`
-	VgName          string `json:"vg_name"`
+	LvName          string `json:"lv_name" binding:"required"`
+	VgName          string `json:"vg_name" binding:"required"`
 	LvAttr          string `json:"lv_attr"`
-	LvSize          string `json:"lv_size"`
+	LvSize          string `json:"lv_size" binding:"required"`
 	PoolLv          string `json:"pool_lv"`
 	Origin          string `json:"origin"`
 	DataPercent     string `json:"data_percent"`

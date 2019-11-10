@@ -78,7 +78,7 @@ func main() {
 		lvm := disk.Group("/lvm")
 		{
 			lvm.GET("/lv", getLv)
-			lvm.POST("/lv")
+			lvm.POST("/lv", createLv)
 			lvm.DELETE("/lv", delLv)
 
 			lvm.GET("/vg", getVg)
@@ -87,7 +87,7 @@ func main() {
 
 			lvm.GET("/pv", getPv)
 			lvm.POST("/pv", createPv)
-			lvm.DELETE("/pv/:name")
+			lvm.DELETE("/pv", delPv)
 		}
 	}
 
@@ -470,6 +470,21 @@ func delLv(c *gin.Context) {
 		c.JSON(http.StatusOK, lvinfo)
 	}
 }
+func createLv(c *gin.Context) {
+	var lvpost hardware.Lv
+	if err := c.ShouldBindJSON(&lvpost); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest,
+			fmt.Sprintf("Wrong parameter: %s ", err)})
+		return
+	}
+	lv, err := hardware.CreateLv(lvpost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("Create lv fail:%s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, lv)
+}
 
 func getPv(c *gin.Context) {
 	pv, err := hardware.GetPv()
@@ -505,6 +520,22 @@ func createPv(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusOK, vginfo)
 	}
+}
+func delPv(c *gin.Context) {
+	pvname := c.Query("pv")
+	if pvname == "" {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "Not get pv device"})
+		return
+	}
+	var pv hardware.Pv
+	pv.PvName = pvname
+	pvs, err := hardware.RemovePV(pv)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("remove vg fail:%s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, pvs)
 }
 
 /*func reducePv(c *gin.Context) {
