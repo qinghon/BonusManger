@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/qinghon/hardware"
 	"github.com/qinghon/network"
 	"github.com/qinghon/system/bonus"
@@ -17,6 +19,8 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"time"
 )
 
@@ -42,6 +46,13 @@ type nodedb struct {
 	Macaddress string `json:"macaddress"`
 }
 
+var upGrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024 * 1024 * 10,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 var DonInsNode bool
 var Don_update bool
 
@@ -107,7 +118,8 @@ func main() {
 	{
 		tool.GET("/reboot", reboot)
 		tool.GET("/shutdown", shutdown)
-		tool.POST("/ssh", openssh)
+		tool.POST("/ssh", checkPrivateIp, openssh)
+		tool.GET("/ws", checkPrivateIp, WsSsh)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
@@ -673,29 +685,6 @@ func openssh(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "params not true"})
 		return
 	}
-	clip := c.ClientIP()
-	ipt := net.ParseIP(clip)
-	var isPrivate bool
-	netcard := network.GetNetworkCard()
-	if len(netcard) == 0 {
-		isPrivate = false
-	}
-	for _, c := range netcard {
-		for _, n := range c.Ip {
-			_, tmp, err := net.ParseCIDR(n)
-			if err != nil {
-				continue
-			}
-			if tmp.Contains(ipt) {
-				isPrivate = true
-				break
-			}
-		}
-	}
-	if !isPrivate {
-		c.JSON(http.StatusForbidden, Message{http.StatusForbidden,
-			"you need in private network set this"})
-	}
 	if len(k.PublicKey) == 0 {
 		k.GenKey(2048)
 	}
@@ -706,8 +695,95 @@ func openssh(c *gin.Context) {
 	}
 	k.PrivateKey = ""
 }
+func wshandleError(ctx *gin.Context, err error) bool {
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+			fmt.Sprintf("%s", err)})
+	}
+	return (err != nil)
+}
+func WsSsh(c *gin.Context) {
+	u, err := user.Current()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, "get user false"})
+		return
+	}
+	/*v, ok := c.Get("user")
+	if !ok {
+		log.Error("jwt token can't find auth user")
+		return
+	}*/
+	/*userM, ok := v.(*models.User)
+	if !ok {
+		log.Error("context user is not a models.User type obj")
+		return
+	}*/
+	cols, err := strconv.Atoi(c.DefaultQuery("cols", "120"))
+	if wshandleError(c, err) {
+		return
+	}
+	//log.Println(err)
+	rows, err := strconv.Atoi(c.DefaultQuery("rows", "32"))
+
+	var k tools.Key
+	keys, err := tools.ReadHostKey(u.Username)
+	if err != nil || len(keys) == 0 {
+		var key tools.Key
+		err = key.GenKey(2048)
+		key.Trust()
+		k = key
+	}
+	for _, ku := range keys {
+		if ku.IsTrust() {
+			k = ku
+		}
+	}
+	client, err := tools.NewSshClient(u.Username, k)
+
+	//client, err := flx.NewSshClient(mc)
+	if wshandleError(c, err) {
+		return
+	}
+	defer client.Close()
+	//startTime := time.Now()
+
+	ssConn, err := tools.NewSshConn(cols, rows, client)
+	if wshandleError(c, err) {
+		return
+	}
+	defer ssConn.Close()
+	// after configure, the WebSocket is ok.
+	wsConn, err := upGrader.Upgrade(c.Writer, c.Request, nil)
+	if wshandleError(c, err) {
+		return
+	}
+	defer wsConn.Close()
+
+	quitChan := make(chan bool, 3)
+
+	var logBuff = new(bytes.Buffer)
+
+	// most messages are ssh output, not webSocket input
+	go ssConn.ReceiveWsMsg(wsConn, logBuff, quitChan)
+	go ssConn.SendComboOutput(wsConn, quitChan)
+	go ssConn.SessionWait(quitChan)
+
+	<-quitChan
+
+	log.Println("websocket finished")
+}
 
 func showVersion() {
 	fmt.Print(Version)
 	os.Exit(0)
+}
+func checkPrivateIp(c *gin.Context) {
+	clip := c.ClientIP()
+	if !network.IpIsPrivate(clip) {
+		c.JSON(http.StatusForbidden, Message{http.StatusForbidden,
+			"you need in private network set this"})
+		return
+	}
+	log.Println("yes! He maybe in private network.")
+	c.Next()
 }

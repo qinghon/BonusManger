@@ -18,3 +18,24 @@ func Getip() string {
 	return strings.Split(conn.LocalAddr().String(), ":")[0]
 }
 
+func IpIsPrivate(ip string) bool {
+	ipt := net.ParseIP(ip)
+	var isPrivate bool
+	netCards := GetNetworkCard()
+	if len(netCards) == 0 {
+		isPrivate = false
+	}
+	for _, c := range netCards {
+		for _, n := range c.Ip {
+			_, tmp, err := net.ParseCIDR(n)
+			if err != nil {
+				continue
+			}
+			if tmp.Contains(ipt) {
+				isPrivate = true
+				break
+			}
+		}
+	}
+	return isPrivate
+}

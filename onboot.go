@@ -125,7 +125,7 @@ func onboot() {
 		log.Println("Ok..,it looks like you don't want to upgrade,I got it")
 		return
 	}
-	timetkm := time.NewTicker(time.Minute * 10)
+	timetkm := time.NewTicker(time.Minute * 20)
 	for {
 		select {
 		case <-timetkm.C:
