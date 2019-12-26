@@ -354,6 +354,7 @@ func (ssConn *SshConn) SendComboOutput(wsConn *websocket.Conn, exitCh chan bool)
 
 	//every 120ms write combine output bytes into websocket response
 	tick := time.NewTicker(time.Millisecond * time.Duration(12))
+	tickPing := time.NewTicker(time.Second * 60)
 	//for range time.Tick(120 * time.Millisecond){}
 	defer tick.Stop()
 	for {
@@ -364,6 +365,8 @@ func (ssConn *SshConn) SendComboOutput(wsConn *websocket.Conn, exitCh chan bool)
 				log.Println("ssh sending combo output to webSocket failed")
 				return
 			}
+		case <-tickPing.C:
+			wsConn.WriteMessage(websocket.PingMessage, []byte(""))
 		case <-exitCh:
 			return
 		}
