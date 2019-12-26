@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const Version = "v0.3.11"
+const Version = "v0.3.12"
 
 type Message struct {
 	Code    int    `json:"code"`
