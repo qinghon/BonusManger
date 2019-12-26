@@ -74,9 +74,9 @@ func GetCurPath() string {
 	file, _ := exec.LookPath(os.Args[0])
 
 	//得到全路径，比如在windows下E:\\golang\\test\\a.exe
-	path, _ := filepath.Abs(file)
+	_path, _ := filepath.Abs(file)
 
-	rst := filepath.Dir(path)
+	rst := filepath.Dir(_path)
 
 	return rst
 }
@@ -145,9 +145,9 @@ func (k *Key) Trust() error {
 		log.Printf("mkdir %s error:%s", u.HomeDir+"/.ssh", err)
 	}
 	if len(k.PrivateKey) != 0 {
-		err = ioutil.WriteFile(u.HomeDir+"/.ssh/id_rsa.bm", []byte(k.PrivateKey), 600)
+		err = ioutil.WriteFile(u.HomeDir+"/.ssh/id_rsa.bm", []byte(k.PrivateKey), 400)
 	}
-	err = ioutil.WriteFile(u.HomeDir+"/.ssh/id_rsa.bm.pub", []byte(k.PublicKey), 644)
+	err = ioutil.WriteFile(u.HomeDir+"/.ssh/id_rsa.bm.pub", []byte(k.PublicKey), 400)
 	if err != nil {
 		log.Printf("write key error:%s", err)
 		return err
@@ -366,7 +366,9 @@ func (ssConn *SshConn) SendComboOutput(wsConn *websocket.Conn, exitCh chan bool)
 				return
 			}
 		case <-tickPing.C:
-			wsConn.WriteMessage(websocket.PingMessage, []byte(""))
+			if err := wsConn.WriteMessage(websocket.PingMessage, []byte("")); err != nil {
+				log.Printf("ssh write ping message error: %s", err)
+			}
 		case <-exitCh:
 			return
 		}
