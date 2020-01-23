@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const Version = "v0.3.12"
+const Version = "v0.3.13"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -134,6 +134,8 @@ func Init() {
 	if *v {
 		showVersion()
 	}
+
+	go network.PatchPpp()
 }
 
 /*// transparent 透传至官方客户端
@@ -371,7 +373,7 @@ func update(c *gin.Context) {
 			fmt.Sprintf("write file failed:  %s", err)})
 		return
 	}
-	err = CopyfileForce("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
+	err = CopyForce("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
 	if err != nil {
 		log.Printf("copy file failed:  %s", err)
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
@@ -450,7 +452,7 @@ func formatPart(c *gin.Context) {
 	by, err := p.Format(form.Dev)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
-			fmt.Sprintf("Format part % fail:%s;%s", form.Dev, err, string(by))})
+			fmt.Sprintf("Format part %s fail:%s;%s", form.Dev, err, string(by))})
 	} else {
 		c.JSON(http.StatusOK, "OK")
 	}
@@ -784,6 +786,6 @@ func checkPrivateIp(c *gin.Context) {
 			"you need in private network set this"})
 		return
 	}
-	log.Println("yes! He maybe in private network.")
 	c.Next()
+	log.Println("yes! He maybe in private network.")
 }

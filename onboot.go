@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"github.com/qinghon/network"
 	"github.com/qinghon/system/bonus"
 	"github.com/qinghon/system/tools"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -126,10 +128,14 @@ func onboot() {
 		return
 	}
 	timetkm := time.NewTicker(time.Minute * 20)
+	timetkp:=time.NewTicker(time.Hour)
 	for {
 		select {
 		case <-timetkm.C:
 			go check_and_update()
+		case <-timetkp.C:
+			network.CLOSE_TK<-false
+			go network.CheckLinkAll()
 		}
 	}
 }
@@ -199,12 +205,17 @@ func check_and_update() {
 
 func down_new_client(md5sum string) {
 	down_path := "/tmp/bouns_manger"
-	err := DownloadFile(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
+	err := DownloadFileWget(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
 	if err != nil {
 		log.Printf("Download new client fail: %s", err)
+
+		err = DownloadFile(fmt.Sprintf(GetClient, last_release.TagName, ARCH), down_path)
+		if err != nil {
+			log.Printf("Download new client fail: %s", err)
+		}
 	}
 	if md5sum == "" {
-		err = CopyfileForce(os.Args[0], down_path)
+		err = CopyForce(os.Args[0], down_path)
 		if err != nil {
 			log.Printf("Copy to %s failed:%s", os.Args[0], err)
 		}
@@ -214,7 +225,7 @@ func down_new_client(md5sum string) {
 			log.Printf("down load file md5sum:%s not equal get file md5sum:%s", down_ed_md5, md5sum)
 			return
 		} else {
-			err = CopyfileForce(os.Args[0], down_path)
+			err = CopyForce(os.Args[0], down_path)
 		}
 	}
 	if err := os.Chmod(os.Args[0], 0755); err != nil {
@@ -289,17 +300,35 @@ func DownloadFile(_URL, _path string) error {
 	}
 	return nil
 }
-
-func CopyfileForce(dstName, srcName string) error {
-	//log.Println("cp", "-f", srcName, dstName)
-	//cmd := exec.Command("cp", "-f", srcName, dstName)
-	//err := cmd.Start()
-	//if err != nil {
-	//	return err
-	//}
-
-	return tools.RunCommand(fmt.Sprintf("cp -f %s %s", srcName, dstName))
-	//return nil
+func DownloadFileWget(_URL, _path string) error {
+	_, err := exec.LookPath("wget")
+	if err != nil {
+		return err
+	}
+	_ = os.Remove(_path)
+	cmd := exec.Command("wget", "-c", "-O", _path, _URL)
+	_, err = tools.CmdStdout(cmd)
+	return err
+}
+func CopyForce(dstName, srcName string) error {
+	if tools.PathExist(dstName) {
+		if err := syscall.Unlink(dstName); err != nil {
+			return err
+		}
+	}
+	srcFile, _ := os.Open(srcName)
+	dstFile, err := os.OpenFile(dstName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	_, err = io.Copy(srcFile, dstFile)
+	if err != nil {
+		log.Println(err)
+	}
+	defer srcFile.Close()
+	defer dstFile.Close()
+	return err
 }
 func Set_arch() {
 	switch runtime.GOARCH {
