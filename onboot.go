@@ -118,6 +118,8 @@ type releaseLatest struct {
 
 func onboot() {
 	go Set_arch()
+	go network.PatchPpp()
+
 	if !DonInsNode {
 		go check_node()
 	} else {
@@ -128,14 +130,14 @@ func onboot() {
 		return
 	}
 	timetkm := time.NewTicker(time.Minute * 20)
-	timetkp:=time.NewTicker(time.Hour)
+	//timetkp:=time.NewTicker(time.Hour)
 	for {
 		select {
 		case <-timetkm.C:
 			go check_and_update()
-		case <-timetkp.C:
-			network.CLOSE_TK<-false
-			go network.CheckLinkAll()
+		//case <-timetkp.C:
+		//	network.CLOSE_TK<-false
+		//	go network.CheckLinkAll()
 		}
 	}
 }

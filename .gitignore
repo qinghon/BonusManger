@@ -1,4 +1,5 @@
 build/
 node*
+bxc-node*
 .idea
 go.sum

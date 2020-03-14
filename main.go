@@ -62,8 +62,13 @@ func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	e := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://console.bonuscloud.io",
-		"http://bm.zzk2.icu", "http://127.0.0.1:8080", "http://localhost:8080"}
+	config.AllowOrigins = []string{
+		"https://console.bonuscloud.io",
+		"https://bm.zzk2.icu",
+		"http://bm.zzk2.icu",
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"https://127.0.0.1:8080"}
 	//config.AllowAllOrigins = true
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
@@ -117,13 +122,12 @@ func main() {
 	tool := e.Group("/tools")
 	{
 		tool.GET("/reboot", reboot)
-		tool.GET("/shutdown", shutdown)
+		tool.GET("/shutdown", checkPrivateIp, shutdown)
 		tool.POST("/ssh", checkPrivateIp, openssh)
 		tool.GET("/ws", checkPrivateIp, WsSsh)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
-
 }
 
 func Init() {
@@ -134,8 +138,6 @@ func Init() {
 	if *v {
 		showVersion()
 	}
-
-	go network.PatchPpp()
 }
 
 /*// transparent 透传至官方客户端
