@@ -15,7 +15,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
+var CLOSE_TK chan bool
 
 type PppConf struct {
 	Interface string `json:"interface"`
@@ -61,6 +63,8 @@ elif which yum ; then
 fi
 `
 
+const  CheckPPPInterval = 5
+
 func Setppp(p PppoeAccount) error {
 
 	//log.Println(p.Conf)
@@ -100,16 +104,28 @@ provider %s
 
 `, p.Name, p.Name, p.Conf.Interface, p.Name)
 	by, err := ioutil.ReadFile("/etc/network/interfaces")
-	if strings.Contains(string(by), fmt.Sprintf("auto %s", p.Name)) {
-		return nil
-	}
-	fp, err := os.OpenFile("/etc/network/interfaces", os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
-	defer fp.Close()
-	_, err = fp.WriteString(inface)
+	if strings.Contains(string(by), fmt.Sprintf("auto %s", p.Name)) {
+		return nil
+	}
+	if ! bytes.Contains(by, []byte("source /etc/network/interfaces.d/*")) {
+		fp, err := os.OpenFile("/etc/network/interfaces", os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return err
+		}
+		defer fp.Close()
+		_, err = fp.WriteString("source /etc/network/interfaces.d/*")
+		if err != nil {
+			return err
+		}
+	}
+	fppp,err:=os.OpenFile(fmt.Sprintf("/etc/network/interfaces.d/%s",p.Name),os.O_RDWR|os.O_CREATE|os.O_TRUNC,0644)
 	if err != nil {
+		return err
+	}
+	if _,err:=fppp.WriteString(fmt.Sprintf(inface,p.Name));err!=nil {
 		return err
 	}
 	return nil
@@ -431,4 +447,43 @@ func IntsallPpp() ([]byte, error) {
 	//	return err
 	//}
 	return cmd.Output()
+}
+
+func CheckLink(p PppoeAccount,t time.Duration) error {
+	ticker:=time.NewTicker(time.Second*t)
+
+	for  {
+		select {
+		case <-ticker.C:
+			cmd:=exec.Command("ping","8.8.8.8","-I",p.Status.Iface,"-w","2")
+			_,err:=tools.CmdStdout(cmd)
+			if err != nil {
+				go p.RestartPPP()
+			}
+		case <-CLOSE_TK:
+			return nil
+		}
+	}
+}
+func CheckLinkAll() error {
+	pas:=ReadDslFile()
+	nets:=LoadAll()
+	for _,pa:=range pas{
+		log.Println(pa.Name)
+		for _,ni:=range nets{
+			if ni.InterfaceName==pa.Name {
+				go CheckLink(pa,CheckPPPInterval)
+			}
+		}
+	}
+	log.Println(nets)
+	return nil
+}
+func (pa *PppoeAccount)RestartPPP() error {
+	err:=KillPpp(pa.Name)
+	if err != nil {
+		return err
+	}
+	_,err=RunPpp(*pa)
+	return err
 }

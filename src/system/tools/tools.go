@@ -62,7 +62,7 @@ type wsMsg struct {
 
 func RunCommand(cmd_str string) error {
 	cmd := exec.Command("sh", "-c", cmd_str)
-	log.Printf("sh -c %s", cmd_str)
+	log.Printf("bash -c %s", cmd_str)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -384,4 +384,35 @@ func (ssConn *SshConn) SessionWait(quitChan chan bool) {
 
 func setQuit(ch chan bool) {
 	ch <- true
+}
+
+func CmdStdout(cmd *exec.Cmd) ([]byte,error) {
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdoutIn, _ := cmd.StdoutPipe()
+	stderrIn, _ := cmd.StderrPipe()
+
+	var err, errStdout, errStderr error
+	stdout := io.MultiWriter(os.Stdout, &stdoutBuf)
+	stderr := io.MultiWriter(os.Stderr, &stderrBuf)
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		_, errStdout = io.Copy(stdout, stdoutIn)
+	}()
+	go func() {
+		_, errStderr = io.Copy(stderr, stderrIn)
+	}()
+	err = cmd.Wait()
+	if err != nil {
+		return nil,err
+	}
+	if errStdout != nil || errStderr != nil {
+		return nil,errStderr
+	}
+	Out:=stdoutBuf.Bytes()
+	ErrOut:=stderrBuf.Bytes()
+
+	return append(Out,ErrOut...),err
 }

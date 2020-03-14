@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const Version = "v0.3.12"
+const Version = "v0.3.13"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -62,8 +62,13 @@ func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	e := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://console.bonuscloud.io",
-		"http://bm.zzk2.icu", "http://127.0.0.1:8080", "http://localhost:8080"}
+	config.AllowOrigins = []string{
+		"https://console.bonuscloud.io",
+		"https://bm.zzk2.icu",
+		"http://bm.zzk2.icu",
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"https://127.0.0.1:8080"}
 	//config.AllowAllOrigins = true
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
@@ -117,13 +122,12 @@ func main() {
 	tool := e.Group("/tools")
 	{
 		tool.GET("/reboot", reboot)
-		tool.GET("/shutdown", shutdown)
+		tool.GET("/shutdown", checkPrivateIp, shutdown)
 		tool.POST("/ssh", checkPrivateIp, openssh)
 		tool.GET("/ws", checkPrivateIp, WsSsh)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
-
 }
 
 func Init() {
@@ -371,7 +375,7 @@ func update(c *gin.Context) {
 			fmt.Sprintf("write file failed:  %s", err)})
 		return
 	}
-	err = CopyfileForce("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
+	err = CopyForce("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
 	if err != nil {
 		log.Printf("copy file failed:  %s", err)
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
@@ -450,7 +454,7 @@ func formatPart(c *gin.Context) {
 	by, err := p.Format(form.Dev)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
-			fmt.Sprintf("Format part % fail:%s;%s", form.Dev, err, string(by))})
+			fmt.Sprintf("Format part %s fail:%s;%s", form.Dev, err, string(by))})
 	} else {
 		c.JSON(http.StatusOK, "OK")
 	}
@@ -784,6 +788,6 @@ func checkPrivateIp(c *gin.Context) {
 			"you need in private network set this"})
 		return
 	}
-	log.Println("yes! He maybe in private network.")
 	c.Next()
+	log.Println("yes! He maybe in private network.")
 }

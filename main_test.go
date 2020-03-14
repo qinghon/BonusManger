@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net"
-	"network"
+	"github.com/qinghon/network"
 	"testing"
 )
 

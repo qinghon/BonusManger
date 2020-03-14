@@ -1,6 +1,7 @@
 package network
 
 import (
+	"github.com/qinghon/system/tools"
 	"log"
 	"net"
 	"strings"
@@ -38,4 +39,27 @@ func IpIsPrivate(ip string) bool {
 		}
 	}
 	return isPrivate
+}
+
+func PatchPpp() error {
+	// 添加自动检测通不通的参数 lcp-echo-interval 和lcp-echo-failure
+	patchShell:=`
+		#!/bin/bash
+		cd /etc/ppp/peers
+		config=(
+		    "lcp-echo-interval 30"
+		    "lcp-echo-failure 2"
+		)
+		for f in $(ls); do
+		    for c in "${!config[@]}"; do
+		        echo "${config[$c]}" 
+		        if ! grep -q "^$(echo ${config[$c]}|awk '{print $1}')" $f ; then
+		            echo "${config[$c]}" >>$f
+		        fi
+		    done
+		    echo "pacthed ppp config $f"
+		done
+	`
+
+	return tools.RunCommand(patchShell)
 }
