@@ -12,6 +12,10 @@ SOC:=$(shell uname -m)
 all: setup build-amd64 build-aarch64 build-arm
 	md5sum `find build -name 'bon*'`>build/md5sum
 
+upx: all
+	upx build/${TARGET_EXEC}_*
+	md5sum `find build -name 'bon*'`>build/md5sum
+
 setup:
 	mkdir -p build/
 

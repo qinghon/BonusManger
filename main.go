@@ -8,7 +8,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/qinghon/hardware"
 	"github.com/qinghon/network"
 	"github.com/qinghon/system/bonus"
 	"github.com/qinghon/system/tools"
@@ -80,6 +79,7 @@ func main() {
 	}
 	e.POST("/bound", tpAll)
 	e.POST("/disk", tpAll)
+	/*
 	disk := e.Group("/disk")
 	{
 		disk.GET("/all", getDiskAll)
@@ -106,6 +106,7 @@ func main() {
 			lvm.DELETE("/pv", delPv)
 		}
 	}
+	*/
 
 	e.GET("/pppoe", getPpp)
 	e.POST("/pppoe", setPpp)
@@ -340,14 +341,14 @@ func applyNet(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
-func getDiskAll(c *gin.Context) {
+/*func getDiskAll(c *gin.Context) {
 	block, err := hardware.Get_block()
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
 			fmt.Sprintf("get block error: %s", err)})
 	}
 	c.JSON(http.StatusOK, block)
-}
+}*/
 func update(c *gin.Context) {
 	file, err := c.FormFile("bonusmanger")
 	if err != nil {
@@ -440,6 +441,7 @@ func GET(url string) ([]byte, error) {
 
 }
 
+/*
 func formatPart(c *gin.Context) {
 	var form struct {
 		Dev  string `json:"dev" binding:"required"`
@@ -553,10 +555,14 @@ func delPv(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, pvs)
 }
+*/
 
-/*func reducePv(c *gin.Context) {
+/*
+func reducePv(c *gin.Context) {
 
-}*/
+}
+*/
+/*
 func getVg(c *gin.Context) {
 	vg, err := hardware.GetVg()
 	if err != nil {
@@ -663,6 +669,7 @@ func umountPart(c *gin.Context) {
 	}
 }
 
+*/
 func shutdown(c *gin.Context) {
 	if err := tools.Shutdown(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
