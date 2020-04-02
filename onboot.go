@@ -9,7 +9,7 @@ import (
 	"github.com/qinghon/system/tools"
 	"io"
 	"io/ioutil"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,7 +29,7 @@ Description=bxc node app
 After=network.target
 
 [Service]
-ExecStart=/opt/bcloud/nodeapi/node --alsologtostderr ${DON_SET_DISK} ${INSERT_STR} 
+ExecStart=/opt/bcloud/nodeapi/node --alsologtostderr
 Restart=always
 RestartSec=10
 
@@ -118,8 +118,8 @@ type releaseLatest struct {
 
 func onboot() {
 	go Set_arch()
-	go network.PatchPpp()
-
+	//go network.PatchPpp()
+	go StartPPP()
 	if !DonInsNode {
 		go check_node()
 	} else {
@@ -361,4 +361,37 @@ func getLatestInfo() (releaseLatest, error) {
 	last_release = release
 	return release, nil
 
+}
+func StartPPP() {
+	pas:=network.ReadDslFile()
+	go func() {
+		var cmd *exec.Cmd
+		for {
+			select {
+			case cmd = <-network.CMD_CHAN:
+				log.Debug("get chan cmd")
+				go runPPP(cmd)
+				log.Debug("cmd started!")
+			}
+		}
+		log.Debug("exited select")
+	}()
+	for _,pa:=range pas {
+
+		err:=pa.Connect()
+		if err != nil {
+			log.Println(err)
+		}
+
+	}
+	//time.Sleep(time.Second*5)
+	//go network.CheckLinkAll()
+	//pppd "nodetach" "noipdefault" "defaultroute" "hide-password" "noauth" "persist" "plugin" "rp-pppoe.so" "maxfail" "0" user test1 password 123456 "lcp-echo-failure" "4" "lcp-echo-interval" "30" "linkname" "test1" "eth0"  logfile /var/run/pppd.log
+	var wait chan int
+	<-wait
+	log.Debug("Useful debugging information.")
+	log.Debug("all pppd exited!")
+}
+func runPPP(cmd *exec.Cmd) ([]byte,error) {
+	return tools.CmdStdout(cmd)
 }

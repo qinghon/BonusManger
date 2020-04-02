@@ -2,7 +2,7 @@ package network
 
 import (
 	"github.com/qinghon/system/tools"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"strings"
 )

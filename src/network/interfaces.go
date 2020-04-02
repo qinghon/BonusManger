@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"net"
 	"reflect"
-
+	"strings"
 )
 
 var NetType  = []string{"auto","allow-auto","allow-hotplug"}
@@ -87,7 +88,7 @@ iface %s %s %s\n`
 func LoadAll() ([]NetInterface) {
 	files:=GetFilelist("/etc/network/interfaces.d")
 	var nets []NetInterface
-	for _,file:=range *files {
+	for _,file:=range files {
 		net_tmp,err:=Load(file)
 		if err != nil {
 			continue
@@ -217,6 +218,48 @@ func UnmarshalOptions(block [][]byte) (*NetOptions) {
 	return &options
 }
 
+func GetNetworkCard() []networkCard {
+	netIs, err := net.Interfaces()
+	if err != nil {
+		log.Printf("fail to get net interfaces: %v", err)
+		return nil
+	}
+
+	net_cards := []networkCard{}
+	for _, netI := range netIs {
+		tmp := networkCard{}
+		if len(netI.HardwareAddr.String()) == 0 {
+			continue
+		}
+		tmp.Macaddr = netI.HardwareAddr.String()
+		if strings.Contains(netI.Name, "veth") {
+			continue
+		} else if strings.Contains(netI.Name, "docker") {
+			continue
+		} else if strings.Contains(netI.Name, "br-") {
+			continue
+		}
+		tmp.Name = netI.Name
+		byName, err := net.InterfaceByName(netI.Name)
+		if err != nil {
+			log.Println("get interface ", tmp.Name, " failed")
+		}
+		address, err := byName.Addrs()
+		for _, v := range address {
+			tmp.Ip = append(tmp.Ip, v.String())
+		}
+		net_cards = append(net_cards, tmp)
+	}
+	return net_cards
+}
+func GetNetsSampleName() ([]string) {
+	netCards:=GetNetworkCard()
+	var netsName []string
+	for _,netCard:=range netCards {
+		netsName=append(netsName,netCard.Name)
+	}
+	return netsName
+}
 /*
 func Unmarshal(block [][]byte,v interface{}) error {
 	rv := reflect.ValueOf(v)

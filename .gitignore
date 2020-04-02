@@ -4,3 +4,4 @@ bxc-node*
 .idea
 go.sum
 vendor/
+*.xmind

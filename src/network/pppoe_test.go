@@ -21,3 +21,13 @@ func TestCheckLink(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestPppoeAccount_Check(t *testing.T) {
+	var pa PppoeAccount
+	pa.Name="wlp3s0"
+	out,err:=pa.Check("8.8.8.8",4)
+	if err!=nil {
+		t.Error(err)
+	}
+	t.Log(string(out))
+}
