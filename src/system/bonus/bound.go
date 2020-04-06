@@ -4,7 +4,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"github.com/qinghon/network"
 	"github.com/qinghon/system/tools"
 	"io/ioutil"
 	"log"
@@ -17,8 +16,8 @@ const NODEDB = "/opt/bcloud/node.db"
 const CERTFILE = "/opt/bcloud/client.crt"
 const CAFILE = "/opt/bcloud/ca.crt"
 const KEYFILE = "/opt/bcloud/client.key"
-const BCODEURL = "https://console.bonuscloud.io/api/bcode/getBcodeForOther/?email="
-const BINDURL = "https://console.bonuscloud.io/api/web/devices/bind"
+const BCODEURL = "https://console.bonuscloud.work/api/bcode/getBcodeForOther/?email="
+const BINDURL = "https://console.bonuscloud.work/api/web/devices/bind"
 
 type SendData struct {
 	Bcode      string `json:"bcode"`
@@ -208,13 +207,15 @@ func bound_post(bcode, email, mac string) (error) {
 	log.Println("Bound success")
 	return nil
 }*/
-func getMacAddrs() (macAddrs []string) {
+func GetMacAddrs() (macAddrs []string) {
 	netInterfaces, err := net.Interfaces()
+
 	if err != nil {
 		return macAddrs
 	}
 
 	for _, netInterface := range netInterfaces {
+
 		macAddr := netInterface.HardwareAddr.String()
 		if len(macAddr) == 0 {
 			continue
@@ -223,7 +224,7 @@ func getMacAddrs() (macAddrs []string) {
 	}
 	return macAddrs
 }
-func isBind() bool {
+func IsBind() bool {
 	if !tools.PathExist(CAFILE) {
 		return false
 	}
@@ -270,7 +271,7 @@ func ReadBcode() (string, error) {
 	return bcode, nil
 }
 func ReadNodedb() (SendData, error) {
-	if !network.PathExist(NODEDB) {
+	if !tools.PathExist(NODEDB) {
 		return SendData{}, os.ErrNotExist
 	}
 	bt, err := ioutil.ReadFile(NODEDB)
@@ -286,7 +287,6 @@ func ReadNodedb() (SendData, error) {
 		return node, os.ErrInvalid
 	}
 	return node, nil
-
 }
 
 /*func Gen() (string) {

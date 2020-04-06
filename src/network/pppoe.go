@@ -250,11 +250,11 @@ func ReadDslFile() []PppoeAccount {
 
 		configs = append(configs, *tmp)
 	}
-	for i, _ := range configs {
+
+	for i:=0;i< len(configs);i++ {
 		configs[i].GetStatus()
 
 	}
-	//log.Println(configs)
 	return configs
 }
 func ResolveDslFile(f_path string) (*PppoeAccount, error) {
@@ -548,7 +548,7 @@ func IntsallPpp() ([]byte, error) {
 	//}
 	return cmd.Output()
 }
-
+/*
 func CheckLinkAll() error {
 	pas := ReadDslFile()
 	for _, pa := range pas {
@@ -558,6 +558,7 @@ func CheckLinkAll() error {
 	}
 	return nil
 }
+*/
 
 func (pa *PppoeAccount) RestartPPP() error {
 	if PPP_POOL[pa.Name] == nil {

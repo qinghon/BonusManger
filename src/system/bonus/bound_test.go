@@ -12,3 +12,7 @@ func TestReadBcode(t *testing.T) {
 	}
 	t.Log(bcode)
 }
+func TestGetMacAddrs(t *testing.T) {
+	macs:=GetMacAddrs()
+	t.Log(macs)
+}

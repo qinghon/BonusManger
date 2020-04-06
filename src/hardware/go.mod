@@ -10,4 +10,7 @@ require (
 	golang.org/x/sys v0.0.0-20191022100944-742c48ecaeb7 // indirect
 )
 
-replace github.com/qinghon/system/package => ../system/package
+replace (
+	github.com/qinghon/system/package => ../system/package
+	golang.org/x/sys => github.com/golang/sys v0.0.0-20200331124033-c3d80250170d
+)

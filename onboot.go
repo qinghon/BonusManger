@@ -363,6 +363,8 @@ func getLatestInfo() (releaseLatest, error) {
 
 }
 func StartPPP() {
+	network.PPP_POOL=make(map[string]*network.StatusStack)
+	network.CMD_CHAN=make(chan *exec.Cmd,5)
 	pas:=network.ReadDslFile()
 	go func() {
 		var cmd *exec.Cmd
@@ -391,6 +393,7 @@ func StartPPP() {
 	<-wait
 	log.Debug("Useful debugging information.")
 	log.Debug("all pppd exited!")
+
 }
 func runPPP(cmd *exec.Cmd) ([]byte,error) {
 	return tools.CmdStdout(cmd)

@@ -5,17 +5,15 @@ import (
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/qinghon/network"
 	"github.com/sirupsen/logrus"
 	"path"
 	"runtime"
 	"strings"
 
 	"os"
-	"os/exec"
 )
 
-const Version = "v0.3.13"
+const Version = "v0.4.0"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -37,9 +35,10 @@ type nodedb struct {
 	Macaddress string `json:"macaddress"`
 }
 
-
 var DonInsNode bool
 var Don_update bool
+var logLevel int
+var debug bool
 
 func main() {
 	Init()
@@ -47,14 +46,17 @@ func main() {
 
 	e := gin.Default()
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{
-		"https://console.bonuscloud.io",
-		"https://bm.zzk2.icu",
-		"http://bm.zzk2.icu",
-		"http://localhost:8080",
-		"http://127.0.0.1:8080",
-		"https://127.0.0.1:8080"}
-	//config.AllowAllOrigins = true
+	if debug {
+		config.AllowAllOrigins = true
+	} else {
+		config.AllowOrigins = []string{
+			"https://console.bonuscloud.io",
+			"https://bm.zzk2.icu",
+			"http://bm.zzk2.icu",
+			"http://localhost:8080",
+			"http://127.0.0.1:8080",
+			"https://127.0.0.1:8080"}
+	}
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
 	e.GET("/status", tpAll)
@@ -100,7 +102,7 @@ func main() {
 	e.DELETE("/pppoe/:name", delPpp)
 	e.PATCH("/pppoe/:name", startPpp)
 	e.PATCH("/pppoe/:name/stop", stopPpp)
-	e.GET("/pppoe/:name/log",getPppLog)
+	e.GET("/pppoe/:name/log", getPppLog)
 	e.GET("/net", getNet)
 	e.PATCH("/net", applyNet)
 	e.PUT("/net", setNet)
@@ -111,7 +113,12 @@ func main() {
 		netApi.GET("/ppp")
 		netApi.POST("/ppp")
 	}
-	e.POST("/bonus/repair", repair)
+	//e.POST("/bonus/repair", repair)
+	b := e.Group("/bonus")
+	{
+		b.POST("/repair", repair)
+		b.GET("/status", bonusGetStatus)
+	}
 	e.POST("/update", update)
 	//e.GET("/system/log",getLog)
 	tool := e.Group("/tools")
@@ -126,29 +133,33 @@ func main() {
 }
 
 func Init() {
-	flag.BoolVar(&DonInsNode, "D", false, "Don install bxc-node")
-	flag.BoolVar(&Don_update, "U", false, "Don check update")
-	var v = flag.Bool("V", false, "show version")
+	flag.BoolVar(&DonInsNode, "D", false, "Don install bxc-node. ")
+	flag.BoolVar(&Don_update, "U", false, "Don check update. ")
+	flag.IntVar(&logLevel, "level", 4, "Show log level. ")
+	flag.BoolVar(&debug, "debug", false, "Debug mode. ")
+	var v = flag.Bool("V", false, "show version. ")
 	flag.Parse()
 	if *v {
 		showVersion()
 	}
-	network.PPP_POOL=make(map[string]*network.StatusStack)
-	network.CMD_CHAN=make(chan *exec.Cmd,5)
 
 	logrus.SetReportCaller(true)
 	logrus.SetFormatter(&logrus.TextFormatter{
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			s := strings.Split(f.Function, ".")
 			funcName := s[len(s)-1]
-			return funcName, fmt.Sprintf("%s:%d", path.Base(f.File), f.Line)
+			return funcName, fmt.Sprintf(" %s:%d", path.Base(f.File), f.Line)
 		},
 	})
 
 	// Output to stdout instead of the default stderr
 	// Can be any io.Writer, see below for File example
 	logrus.SetOutput(os.Stdout)
-	logrus.SetLevel(logrus.DebugLevel)
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+		return
+	}
+	logrus.SetLevel(logrus.Level(logLevel))
 }
 
 /*// transparent 透传至官方客户端

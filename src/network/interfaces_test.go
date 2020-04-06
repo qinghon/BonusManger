@@ -2,13 +2,14 @@ package network
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"testing"
 )
 
 func TestLoad(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
-	Is,err:=Load(`
+	bys:=`
 # interfaces(5) file used by ifup(8) and ifdown(8)
 auto lo
 iface lo inet loopback
@@ -27,7 +28,9 @@ bridge_maxage 12
 
 
 #pre-up iptables-restore < /etc/iptables-rules
-`)
+`
+	ioutil.WriteFile("/tmp/interfaces",[]byte(bys),0644)
+	Is,err:=Load("/tmp/interfaces")
 	if err != nil {
 		t.Error(err)
 	}

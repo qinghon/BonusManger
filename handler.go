@@ -9,8 +9,8 @@ import (
 	"github.com/qinghon/network"
 	"github.com/qinghon/system/bonus"
 	"github.com/qinghon/system/tools"
-	"io/ioutil"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -90,7 +90,7 @@ func getPpp(c *gin.Context) {
 }
 func getPppLog(c *gin.Context) {
 	filename := c.Param("name")
-	var pa network.PppoeAccount
+	pa:=network.PPP_POOL[filename].PA
 	pa.Name=filename
 	Blog,err:=pa.GetLog()
 	if err != nil {
@@ -292,11 +292,14 @@ func update(c *gin.Context) {
 			fmt.Sprintf("write file failed:  %s", err)})
 		return
 	}
+	//f.Seek(0,0)
+	//log.Debug(tools.GetFileContentType(f))
 	err = CopyForce("/opt/BonusManger/bin/bonusmanger", "/tmp/bonusmanger")
 	if err != nil {
 		log.Printf("copy file failed:  %s", err)
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("copy file failed:  %s", err)})
+		return
 	}
 	c.JSON(http.StatusOK, Message{http.StatusOK, "OK ,reboot now"})
 	go func() {
@@ -341,6 +344,16 @@ func repair(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
+func bonusGetStatus(c *gin.Context) {
+	isBound:=bonus.IsBind()
+	okDns,okNet:=bonus.GetGatewayStatus()
+	macs:=bonus.GetMacAddrs()
+	if len(macs)<1 {
+		macs=[]string{""}
+	}
+	c.JSON(http.StatusOK,gin.H{"mac":macs[0],"status":gin.H{"bound":isBound,"network":okNet,"dns":okDns}})
+}
+
 func GET(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {

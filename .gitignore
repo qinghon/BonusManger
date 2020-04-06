@@ -5,3 +5,7 @@ bxc-node*
 go.sum
 vendor/
 *.xmind
+BonusManger
+*history
+.config
+.nano
