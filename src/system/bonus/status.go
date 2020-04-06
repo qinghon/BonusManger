@@ -1,8 +1,8 @@
 package bonus
 
 import (
-	"net"
 	log "github.com/sirupsen/logrus"
+	"net"
 )
 
 

@@ -20,13 +20,6 @@ type Message struct {
 	Details string `json:"details"`
 	//Data interface{} `json:"data"`
 }
-type StatusDetail struct {
-	Bcode       string `json:"bcode"`
-	Email       string `json:"email"`
-	NodeVersion string `json:"node_version"`
-	//K8sVersion string `json:"k8s_version"`
-	Tun0 bool `json:"tun0"`
-}
 
 // Unmarshal used
 type nodedb struct {
@@ -36,7 +29,7 @@ type nodedb struct {
 }
 
 var DonInsNode bool
-var Don_update bool
+var DonUpdate bool
 var logLevel int
 var debug bool
 
@@ -113,7 +106,6 @@ func main() {
 		netApi.GET("/ppp")
 		netApi.POST("/ppp")
 	}
-	//e.POST("/bonus/repair", repair)
 	b := e.Group("/bonus")
 	{
 		b.POST("/repair", repair)
@@ -134,7 +126,7 @@ func main() {
 
 func Init() {
 	flag.BoolVar(&DonInsNode, "D", false, "Don install bxc-node. ")
-	flag.BoolVar(&Don_update, "U", false, "Don check update. ")
+	flag.BoolVar(&DonUpdate, "U", false, "Don check update. ")
 	flag.IntVar(&logLevel, "level", 4, "Show log level. ")
 	flag.BoolVar(&debug, "debug", false, "Debug mode. ")
 	var v = flag.Bool("V", false, "show version. ")

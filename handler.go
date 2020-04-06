@@ -20,6 +20,13 @@ import (
 	"strconv"
 	"time"
 )
+type StatusDetail struct {
+	Bcode       string `json:"bcode"`
+	Email       string `json:"email"`
+	NodeVersion string `json:"node_version"`
+	//K8sVersion string `json:"k8s_version"`
+	Tun0 bool `json:"tun0"`
+}
 
 var upGrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -63,18 +70,18 @@ func getStatusDetail(c *gin.Context) {
 			}
 		}
 	}
-	var tmp_version map[string]string
-	node_version_bt, err := GET("http://localhost:9017/version")
+	var tmpVersions map[string]string
+	nodeVersionBts, err := GET("http://localhost:9017/version")
 	if err == nil {
-		err = json.Unmarshal(node_version_bt, &tmp_version)
+		err = json.Unmarshal(nodeVersionBts, &tmpVersions)
 		if err == nil {
-			detail.NodeVersion = tmp_version["version"]
+			detail.NodeVersion = tmpVersions["version"]
 		} else {
 			log.Printf("Unmarshal version fail:%s", err)
 		}
 	}
-	if net_tun0, err := net.InterfaceByName("tun0"); err == nil {
-		log.Println(net_tun0.Addrs())
+	if netTun0, err := net.InterfaceByName("tun0"); err == nil {
+		log.Println(netTun0.Addrs())
 		detail.Tun0 = true
 	} else {
 		detail.Tun0 = false
@@ -102,25 +109,25 @@ func getPppLog(c *gin.Context) {
 	c.JSON(http.StatusOK,gin.H{"result":string(Blog)})
 }
 func setPpp(c *gin.Context) {
-	var acc_conf network.PppoeAccount
-	if err := c.ShouldBindJSON(&acc_conf); err != nil {
+	var accConf network.PppoeAccount
+	if err := c.ShouldBindJSON(&accConf); err != nil {
 		log.Printf("bind to PppoeAccount error: %s", err)
 	}
-	if acc_conf.Name == "" {
+	if accConf.Name == "" {
 		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
-	} else if acc_conf.Username == "" || acc_conf.Password == "" {
+	} else if accConf.Username == "" || accConf.Password == "" {
 		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
 	}
-	err := network.Setppp(acc_conf)
+	err := network.Setppp(accConf)
 	if err != nil {
 		c.JSON(http.StatusNotImplemented,
 			Message{http.StatusNotImplemented, "Set ppp account error:" +
 				fmt.Sprintf("%s", err)})
-	} else if err := acc_conf.Connect(); err != nil {
+	} else if err := accConf.Connect(); err != nil {
 		c.JSON(http.StatusOK, Message{http.StatusInternalServerError,
 			fmt.Sprintf("pppoe call fail: %s\n", err)})
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, "Set " + acc_conf.Name + " OK "})
+		c.JSON(http.StatusOK, Message{http.StatusOK, "Set " + accConf.Name + " OK "})
 	}
 }
 func delPpp(c *gin.Context) {
@@ -159,8 +166,8 @@ func startPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	acc_conf:=network.PPP_POOL[filename].PA
-	acc_conf.Close()
+	accConfClose :=network.PPP_POOL[filename].PA
+	accConfClose.Close()
 	//todo
 	accConf,err:=network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s",filename))
 	if err != nil {
@@ -183,8 +190,8 @@ func stopPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	acc_conf:=network.PPP_POOL[filename].PA
-	if err := acc_conf.Close(); err != nil {
+	accConf :=network.PPP_POOL[filename].PA
+	if err := accConf.Close(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("stop %s fail: %s", filename, err)})
 	} else {
@@ -208,7 +215,7 @@ func getNet(c *gin.Context) {
 		return
 	}
 	cards := network.GetNetworkCard()
-	c.JSON(http.StatusOK, network.NetInterfaces{string(by), cards})
+	c.JSON(http.StatusOK, network.NetInterfaces{Context: string(by), NetworkCard: cards})
 }
 func setNet(c *gin.Context) {
 	var by network.NetInterfaces
@@ -250,8 +257,8 @@ func applyNet(c *gin.Context) {
 
 func HandlerPPP(c *gin.Context) {
 	actionPPP:=c.Param("action")
-	var acc_conf network.PppoeAccount
-	if err := c.ShouldBindJSON(&acc_conf); err != nil {
+	var accConf network.PppoeAccount
+	if err := c.ShouldBindJSON(&accConf); err != nil {
 		log.Printf("bind to PppoeAccount error: %s", err)
 	}
 	switch actionPPP {
@@ -635,7 +642,7 @@ func wshandleError(ctx *gin.Context, err error) bool {
 		ctx.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("%s", err)})
 	}
-	return (err != nil)
+	return err != nil
 }
 func WsSsh(c *gin.Context) {
 	u, err := user.Current()

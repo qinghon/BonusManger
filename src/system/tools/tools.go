@@ -27,9 +27,9 @@ type Key struct {
 // the data comes from ssh server.
 
 
-func RunCommand(cmd_str string) error {
-	cmd := exec.Command("sh", "-c", cmd_str)
-	log.Printf("bash -c %s", cmd_str)
+func RunCommand(cmdStr string) error {
+	cmd := exec.Command("sh", "-c", cmdStr)
+	log.Printf("bash -c %s", cmdStr)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func (k *Key) GenKey(bit int) error {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: derStream,
 	}
-	pri_b := pem.EncodeToMemory(blk)
-	k.PrivateKey = string(pri_b)
+	priBS := pem.EncodeToMemory(blk)
+	k.PrivateKey = string(priBS)
 
 	// public key generate
 	pub := &pri.PublicKey
@@ -83,7 +83,7 @@ func (k *Key) GenKey(bit int) error {
 	if err != nil {
 		return err
 	}
-	sshpub_b := ssh.MarshalAuthorizedKey(sshpub)
+	sshpubBS := ssh.MarshalAuthorizedKey(sshpub)
 	/*
 		// gen pubkey format pki pem
 		// but I only ssh public key
@@ -96,7 +96,7 @@ func (k *Key) GenKey(bit int) error {
 			Bytes:derPkix,
 		}
 		pub_b:=pem.EncodeToMemory(blk)*/
-	k.PublicKey = string(sshpub_b)
+	k.PublicKey = string(sshpubBS)
 	return nil
 }
 

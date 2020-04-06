@@ -102,15 +102,15 @@ func Setppp(p PppoeAccount) error {
 		return err
 	}
 	defer fs.Close()
-	conf_str := strings.Join(p.Conf.Other, "\n")
-	conf_str += fmt.Sprintf("\nuser \"%s\"", p.Username)
-	conf_str += fmt.Sprintf("\n%s", p.Conf.Interface)
+	confStr := strings.Join(p.Conf.Other, "\n")
+	confStr += fmt.Sprintf("\nuser \"%s\"", p.Username)
+	confStr += fmt.Sprintf("\n%s", p.Conf.Interface)
 	if p.Conf.Mtu != 0 {
-		conf_str += fmt.Sprintf("\nmtu %d ", p.Conf.Mtu)
+		confStr += fmt.Sprintf("\nmtu %d ", p.Conf.Mtu)
 	}
-	conf_str += "\n"
-	//log.Print(conf_str)
-	_, err = fs.WriteString(conf_str)
+	confStr += "\n"
+	//log.Print(confStr)
+	_, err = fs.WriteString(confStr)
 	if err != nil {
 		return err
 	}
@@ -257,49 +257,49 @@ func ReadDslFile() []PppoeAccount {
 	}
 	return configs
 }
-func ResolveDslFile(f_path string) (*PppoeAccount, error) {
+func ResolveDslFile(fPath string) (*PppoeAccount, error) {
 	var p PppoeAccount
-	fd, err := os.Open(f_path)
+	fd, err := os.Open(fPath)
 	if err != nil {
-		log.Printf("open %s failed,error :%s", f_path, err)
+		log.Printf("open %s failed,error :%s", fPath, err)
 		return nil, err
 	}
-	p.Name = filepath.Base(f_path)
+	p.Name = filepath.Base(fPath)
 	defer fd.Close()
 	br := bufio.NewReader(fd)
-	mtu_reg, err := regexp.Compile("mtu.?(.*)")
-	user_reg, err := regexp.Compile("user.?\"(.*)\"")
+	mtuReg, err := regexp.Compile("mtu.?(.*)")
+	userReg, err := regexp.Compile("user.?\"(.*)\"")
 	netCards := GetNetsSampleName()
 	for {
 		l, _, c := br.ReadLine()
 		if c == io.EOF {
 			break
 		}
-		tmp_s := strings.TrimSpace(string(l))
-		if len(tmp_s) == 0 {
+		tmpS := strings.TrimSpace(string(l))
+		if len(tmpS) == 0 {
 			continue
 		}
-		if []byte(tmp_s)[:1][0] == []byte("#")[0] {
+		if []byte(tmpS)[:1][0] == []byte("#")[0] {
 			continue
 		}
-		if strInArray(netCards, tmp_s) != -1 {
-			p.Conf.Interface = tmp_s
-			log.Debug("find interface set as ", tmp_s)
+		if strInArray(netCards, tmpS) != -1 {
+			p.Conf.Interface = tmpS
+			log.Debug("find interface set as ", tmpS)
 			continue
 		}
-		if strings.Contains(tmp_s, "user ") {
-			sub := user_reg.FindSubmatch([]byte(tmp_s))
+		if strings.Contains(tmpS, "user ") {
+			sub := userReg.FindSubmatch([]byte(tmpS))
 			if len(sub) <= 1 {
-				log.Printf("not found user in %s", f_path)
+				log.Printf("not found user in %s", fPath)
 			} else {
 				p.Username = string(sub[1])
 			}
 			continue
 		}
-		if strings.Contains(tmp_s, "mtu") {
-			sub := mtu_reg.FindSubmatch([]byte(tmp_s))
+		if strings.Contains(tmpS, "mtu") {
+			sub := mtuReg.FindSubmatch([]byte(tmpS))
 			if len(sub) <= 1 {
-				log.Debugf("not found mtu in %s", f_path)
+				log.Debugf("not found mtu in %s", fPath)
 			} else {
 				p.Conf.Mtu, err = strconv.Atoi(string(sub[1]))
 				if err != nil {
@@ -308,12 +308,12 @@ func ResolveDslFile(f_path string) (*PppoeAccount, error) {
 			}
 			continue
 		}
-		if strings.Contains(tmp_s, " ") {
-			sub := strings.Split(tmp_s, " ")
+		if strings.Contains(tmpS, " ") {
+			sub := strings.Split(tmpS, " ")
 			p.Conf.Other = append(p.Conf.Other, sub...)
 			continue
 		}
-		p.Conf.Other = append(p.Conf.Other, tmp_s)
+		p.Conf.Other = append(p.Conf.Other, tmpS)
 	}
 	pd, err := getDslPassword(p.Username)
 	if err == nil {
@@ -357,21 +357,21 @@ func ResolveChapSecrets() ([]chapSecret, error) {
 		if c == io.EOF {
 			break
 		}
-		// tmp_s clean space not head or end
-		tmp_s := strings.TrimSpace(string(l))
-		if []byte(tmp_s)[:1][0] == []byte("#")[0] {
+		// tmpS clean space not head or end
+		tmpS := strings.TrimSpace(string(l))
+		if []byte(tmpS)[:1][0] == []byte("#")[0] {
 			continue
 		}
 
-		tmp_s_s := strings.Split(tmp_s, " ")
+		tmpSSES := strings.Split(tmpS, " ")
 
-		for i := 0; i < len(tmp_s_s); i++ { //clean " in string
-			tmp_s_s[i] = strings.ReplaceAll(tmp_s_s[i], "\"", "")
+		for i := 0; i < len(tmpSSES); i++ { //clean " in string
+			tmpSSES[i] = strings.ReplaceAll(tmpSSES[i], "\"", "")
 		}
 		var secrets []string
-		for i := 0; i < len(tmp_s_s); i++ { //clean no content string in list
-			if tmp_s_s[i] != "" {
-				secrets = append(secrets, tmp_s_s[i])
+		for i := 0; i < len(tmpSSES); i++ { //clean no content string in list
+			if tmpSSES[i] != "" {
+				secrets = append(secrets, tmpSSES[i])
 			}
 		}
 		if len(secrets) <= 2 {
@@ -395,21 +395,21 @@ func ResolvePapSecrets() ([]papSecret, error) {
 		if c == io.EOF {
 			break
 		}
-		// tmp_s clean space not head or end
-		tmp_s := strings.TrimSpace(string(l))
-		if []byte(tmp_s)[:1][0] == []byte("#")[0] {
+		// tmpS clean space not head or end
+		tmpS := strings.TrimSpace(string(l))
+		if []byte(tmpS)[:1][0] == []byte("#")[0] {
 			continue
 		}
 
-		tmp_s_s := strings.Split(tmp_s, " ")
+		tmpSSES := strings.Split(tmpS, " ")
 
-		for i := 0; i < len(tmp_s_s); i++ { //clean " in string
-			tmp_s_s[i] = strings.ReplaceAll(tmp_s_s[i], "\"", "")
+		for i := 0; i < len(tmpSSES); i++ { //clean " in string
+			tmpSSES[i] = strings.ReplaceAll(tmpSSES[i], "\"", "")
 		}
 		var secrets []string
-		for i := 0; i < len(tmp_s_s); i++ { //clean no content string in list
-			if tmp_s_s[i] != "" {
-				secrets = append(secrets, tmp_s_s[i])
+		for i := 0; i < len(tmpSSES); i++ { //clean no content string in list
+			if tmpSSES[i] != "" {
+				secrets = append(secrets, tmpSSES[i])
 			}
 		}
 		if len(secrets) <= 2 {
@@ -421,7 +421,7 @@ func ResolvePapSecrets() ([]papSecret, error) {
 }
 
 func GetFilelist(path string) []string {
-	files := []string{}
+	var files []string
 	err := filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
 		if f == nil {
 			return err
@@ -452,24 +452,24 @@ func ReadChapSecrets(acc []PppoeAccount) []PppoeAccount {
 		if c == io.EOF {
 			break
 		}
-		tmp_s := strings.TrimSpace(string(l))
-		if []byte(tmp_s)[:1][0] == []byte("#")[0] {
+		tmpS := strings.TrimSpace(string(l))
+		if []byte(tmpS)[:1][0] == []byte("#")[0] {
 			continue
 		}
-		tmp_s = strings.ReplaceAll(tmp_s, "\"", "")
-		tmp_s_s := strings.Split(tmp_s, " ")
-		if len(tmp_s_s) <= 2 {
+		tmpS = strings.ReplaceAll(tmpS, "\"", "")
+		tmpSSES := strings.Split(tmpS, " ")
+		if len(tmpSSES) <= 2 {
 			continue
 			log.Println("not split passwd line")
 		}
 		for i, a := range acc {
-			if a.Username == tmp_s_s[0] {
-				acc[i].Password = tmp_s_s[2]
+			if a.Username == tmpSSES[0] {
+				acc[i].Password = tmpSSES[2]
 			}
 		}
 		//tmp_p := PppoeAccount{}
-		//tmp_p.Username = tmp_s_s[0]
-		//tmp_p.Password = tmp_s_s[2]
+		//tmp_p.Username = tmpSSES[0]
+		//tmp_p.Password = tmpSSES[2]
 		//acc = append(acc, tmp_p)
 	}
 	return acc
@@ -695,7 +695,7 @@ func (pa *PppoeAccount) Check(address []string, num int, t uint8) ([]byte, error
 		}
 	}
 	log.Debug(errNum)
-	if (len(address) <= 2 && errNum >= 1) {
+	if len(address) <= 2 && errNum >= 1 {
 		return output, errors.New("Connect not work. ")
 	} else if len(address) > 2 && float64(errNum) > float64(len(address))*0.75 {
 

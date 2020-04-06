@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net"
 	"reflect"
 	"strings"
@@ -89,11 +89,11 @@ func LoadAll() ([]NetInterface) {
 	files:=GetFilelist("/etc/network/interfaces.d")
 	var nets []NetInterface
 	for _,file:=range files {
-		net_tmp,err:=Load(file)
+		netTmps,err:=Load(file)
 		if err != nil {
 			continue
 		}
-		nets=append(nets,net_tmp...)
+		nets=append(nets, netTmps...)
 	}
 	return nets
 }
@@ -146,12 +146,12 @@ func Load(_path string) ([]NetInterface, error) {
 	var nets []NetInterface
 	for _,block:=range blocks {
 
-		net_tmp,err:=Unmarshal(block)
+		netTmp,err:=Unmarshal(block)
 		if err!=nil {
 			log.Println(err)
 			continue
 		}
-		nets=append(nets,*net_tmp)
+		nets=append(nets,*netTmp)
 	}
 
 	return nets, nil
@@ -178,12 +178,12 @@ func Unmarshal(block0 [][]byte) (*NetInterface,error) {
 }
 func UnmarshalHead(block [][]byte) (*NetInterfaceHead,error) {
 	if len(block) !=2 {
-		return nil, errors.New("Vaild head len")
+		return nil, errors.New("Vaild head len. ")
 	}
 	var head NetInterfaceHead
 	line1:=keyValSplit(block[0])
 	if len(line1) < 2 {
-		return nil, errors.New("Vaild head split")
+		return nil, errors.New("Vaild head split. ")
 	}
 	//log.Println(line1)
 	head.LinkUp=string(line1[0])
@@ -193,7 +193,7 @@ func UnmarshalHead(block [][]byte) (*NetInterfaceHead,error) {
 
 	if len(line2) != 4 {
 		log.Println(line2)
-		return nil, errors.New("Vaild head iface")
+		return nil, errors.New("Vaild head iface. ")
 	}
 	head.Protocol=string(line2[2])
 	head.Type=string(line2[3])
@@ -225,7 +225,7 @@ func GetNetworkCard() []networkCard {
 		return nil
 	}
 
-	net_cards := []networkCard{}
+	var netCards []networkCard
 	for _, netI := range netIs {
 		tmp := networkCard{}
 		if len(netI.HardwareAddr.String()) == 0 {
@@ -248,9 +248,9 @@ func GetNetworkCard() []networkCard {
 		for _, v := range address {
 			tmp.Ip = append(tmp.Ip, v.String())
 		}
-		net_cards = append(net_cards, tmp)
+		netCards = append(netCards, tmp)
 	}
-	return net_cards
+	return netCards
 }
 func GetNetsSampleName() ([]string) {
 	netCards:=GetNetworkCard()

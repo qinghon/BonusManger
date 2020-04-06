@@ -57,7 +57,7 @@ type Lv struct {
 	ConvertLv       string `json:"convert_lv"`
 }
 
-func install_lvm() ([]byte, error) {
+func installLvm() ([]byte, error) {
 	if !_package.CheckExec("lvs") {
 		return _package.Install("lvm2")
 	} else {
@@ -65,7 +65,7 @@ func install_lvm() ([]byte, error) {
 	}
 }
 func GetPv() (PV, error) {
-	install_lvm()
+	installLvm()
 	cmd := exec.Command("pvs", "--reportformat", "json")
 	out, err := cmd.Output()
 	if err != nil {
@@ -104,7 +104,7 @@ func RemovePV(pv Pv) (PV, error) {
 }
 
 func GetVg() (VG, error) {
-	install_lvm()
+	installLvm()
 	cmd := exec.Command("vgs", "--reportformat", "json")
 	out, err := cmd.Output()
 	if err != nil {
@@ -169,7 +169,7 @@ func RemoveVg(vg Vg) (VG, error) {
 	return GetVg()
 }
 func GetLv() (LV, error) {
-	install_lvm()
+	installLvm()
 	cmd := exec.Command("lvs", "--reportformat", "json")
 	out, err := cmd.Output()
 	if err != nil {

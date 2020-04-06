@@ -3,9 +3,9 @@ package tools
 import (
 	"bytes"
 	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"io"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )

@@ -112,9 +112,9 @@ func getBcode(email string) string {
 		log.Println("read body failed")
 		return ""
 	}
-	var bcodes_ret GetBcode
-	json.Unmarshal(body, &bcodes_ret)
-	if bcodes_ret.Code != 200 {
+	var bcodesRet GetBcode
+	json.Unmarshal(body, &bcodesRet)
+	if bcodesRet.Code != 200 {
 		log.Println("Unmarshal body failed,raw body:", string(body))
 		return ""
 	}
@@ -122,17 +122,17 @@ func getBcode(email string) string {
 	log.Println(CountryCode)
 	switch CountryCode {
 	case "CN":
-		if len(bcodes_ret.Ret.Mainland) == 0 {
+		if len(bcodesRet.Ret.Mainland) == 0 {
 			return ""
 		}
-		return bcodes_ret.Ret.Mainland[0].Bcode
+		return bcodesRet.Ret.Mainland[0].Bcode
 	case "":
 		return ""
 	default:
-		if len(bcodes_ret.Ret.NonMainland) == 0 {
+		if len(bcodesRet.Ret.NonMainland) == 0 {
 			return ""
 		}
-		return bcodes_ret.Ret.NonMainland[0].Bcode
+		return bcodesRet.Ret.NonMainland[0].Bcode
 
 	}
 }
