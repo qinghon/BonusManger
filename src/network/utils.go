@@ -63,3 +63,14 @@ func PatchPpp() error {
 
 	return tools.RunCommand(patchShell)
 }
+
+func PatchStopPpp() error {
+	// 只能删除单个拨号的脚本
+	stopAndDelAuto:=`#!/bin/bash
+		test -f /opt/BonusManger/patchstopppp &&exit 0
+		cat /etc/network/interfaces|grep 'bonusmanger' -B 2|head -n 1|awk '{print "ifdown",$2}'|bash -x
+		sed -i  '/bonusmanger/,+1d;:go;1,2!{P;$!N;D};N;bgo' /etc/network/interfaces
+		touch /opt/BonusManger/patchstopppp
+`
+	return tools.RunCommand(stopAndDelAuto)
+}

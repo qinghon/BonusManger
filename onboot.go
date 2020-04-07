@@ -118,7 +118,9 @@ type releaseLatest struct {
 
 func onboot() {
 	go setArch()
-	//go network.PatchPpp()
+	if err:=network.PatchStopPpp();err != nil {
+		log.Error(err)
+	}
 	go StartPPP()
 	if !DonInsNode {
 		go checkNode()

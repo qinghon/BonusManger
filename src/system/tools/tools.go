@@ -28,7 +28,7 @@ type Key struct {
 
 
 func RunCommand(cmdStr string) error {
-	cmd := exec.Command("sh", "-c", cmdStr)
+	cmd := exec.Command("bash", "-c", cmdStr)
 	log.Printf("bash -c %s", cmdStr)
 	if err := cmd.Start(); err != nil {
 		return err

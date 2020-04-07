@@ -92,7 +92,7 @@ elif which yum ; then
 fi
 `
 
-const CheckPPPInterval = 5
+const CheckPPPInterval = 10
 
 func Setppp(p PppoeAccount) error {
 
@@ -561,6 +561,7 @@ func CheckLinkAll() error {
 */
 
 func (pa *PppoeAccount) RestartPPP() error {
+	log.Warnf("Reconnect ppp %s",pa.Name)
 	if PPP_POOL[pa.Name] == nil {
 		pa.Connect()
 		return nil
@@ -588,6 +589,7 @@ func (pa *PppoeAccount) Connect() (error) {
 		log.Warnf("%s connected", pa.Name)
 		return nil
 	}
+	pa.Status.Check = false
 	connect:
 	arg := append([]string{"nodetach"}, pa.Conf.Other...)
 	arg = append(arg, pa.Conf.Interface,
@@ -604,8 +606,8 @@ func (pa *PppoeAccount) Connect() (error) {
 	//	return err
 	//}
 	PPP_POOL[pa.Name] = &StatusStack{cmd, *pa}
-	pa.Status.Check = true
 	CMD_CHAN <- cmd
+	pa.Status.Check = true
 	log.Println(fmt.Sprintf("%s starting", pa.Name))
 	go pa.GoCheck()
 	return nil
@@ -633,17 +635,13 @@ func (pa *PppoeAccount) Remove() (error) {
 	return os.Remove(path.Join("/etc/ppp/peers", pa.Name))
 }
 
-/*
-t: type: 一个字节
-value: 11100000 http+ping+ping网关
-                 1    1    1      00000
-*/
 
 func (pa *PppoeAccount) GoCheck() {
 	time.Sleep(time.Second * 15)
 	tk := time.NewTicker(time.Second * CheckPPPInterval)
 	pa.Status.Check = true
-	var reCheck chan bool
+	reCheck:=make(chan bool,2)
+	//log.Debug(reCheck)
 	for {
 		select {
 		case <-tk.C:
@@ -664,6 +662,8 @@ func (pa *PppoeAccount) GoCheck() {
 				log.Debug(pa.Status.Check)
 				go pa.RestartPPP()
 			}
+		case <-time.After(time.Second * CheckPPPInterval * 2):
+			log.Debug("Check pppoe timeout")
 		}
 		if pa.Status.Check == false {
 			return
@@ -672,13 +672,17 @@ func (pa *PppoeAccount) GoCheck() {
 	}
 	return
 }
-
+/*
+t: type: 一个字节
+value: 11100000 http+ping+ping网关
+                 1    1    1      00000
+*/
 func (pa *PppoeAccount) Check(address []string, num int, t uint8) ([]byte, error) {
 
 	log.Debugf("Status Check Type: %d", t)
 
 	if address == nil || len(address) == 0 {
-		address = []string{"8.8.8.8", "114.114.114.114"}
+		address = []string{"8.8.8.8", "223.5.5.5"}
 		log.Debugf("Address: %s", address)
 	}
 
