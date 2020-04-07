@@ -3,3 +3,9 @@ node*
 bxc-node*
 .idea
 go.sum
+vendor/
+*.xmind
+BonusManger
+*history
+.config
+.nano

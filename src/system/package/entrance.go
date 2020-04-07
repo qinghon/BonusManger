@@ -5,7 +5,7 @@ import (
 	"os/exec"
 )
 
-var PACKAGE_MANGER string
+var PACKAGEMANGER string
 
 func CheckExec(exe string) (bool) {
 	_, err := exec.LookPath(exe)
@@ -14,21 +14,21 @@ func CheckExec(exe string) (bool) {
 
 func checkManger() {
 	if CheckExec("apt") {
-		PACKAGE_MANGER = "apt"
+		PACKAGEMANGER = "apt"
 	} else if CheckExec("yum") {
-		PACKAGE_MANGER = "yum"
+		PACKAGEMANGER = "yum"
 	} else if CheckExec("apk") {
-		PACKAGE_MANGER = "apk"
+		PACKAGEMANGER = "apk"
 	} else if CheckExec("opkg") {
-		PACKAGE_MANGER = "opkg"
+		PACKAGEMANGER = "opkg"
 	} else {
-		PACKAGE_MANGER = ""
+		PACKAGEMANGER = ""
 	}
 }
 
 func Install(p string) ([]byte, error) {
 	checkManger()
-	switch PACKAGE_MANGER {
+	switch PACKAGEMANGER {
 	case "apt":
 		_,err:=AptInstall(p)
 		if err!=nil {
@@ -38,6 +38,6 @@ func Install(p string) ([]byte, error) {
 	case "yum":
 		return YumInstall(p)
 	default:
-		return nil ,errors.New("Not supported yet")
+		return nil ,errors.New("Not supported yet. ")
 	}
 }

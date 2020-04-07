@@ -7,12 +7,12 @@ import (
 )
 
 func Test_get_all(t *testing.T) {
-	devices := Get_all()
+	devices := GetAll()
 
 	t.Log(devices)
 }
 func Test_get_block(t *testing.T) {
-	Get_block()
+	GetBlock()
 }
 func Test_ReadMounts(t *testing.T) {
 	mo, err := ReadMounts("/proc/mounts")

@@ -16,7 +16,7 @@ func Test_Getfilemd5(t *testing.T) {
 }
 
 func Test_check_and_update(t *testing.T)  {
-	check_and_update()
+	checkAndUpdate()
 }
 func TestDownloadFileWget(t *testing.T) {
 	DownloadFileWget("https://github.com/qinghon/BonusManger/releases/download/v0.3.12/bonus_manger_aarch64","/tmp/bonus_manager")

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"log"
+	"net"
 	"reflect"
-
+	"strings"
 )
 
 var NetType  = []string{"auto","allow-auto","allow-hotplug"}
@@ -87,12 +88,12 @@ iface %s %s %s\n`
 func LoadAll() ([]NetInterface) {
 	files:=GetFilelist("/etc/network/interfaces.d")
 	var nets []NetInterface
-	for _,file:=range *files {
-		net_tmp,err:=Load(file)
+	for _,file:=range files {
+		netTmps,err:=Load(file)
 		if err != nil {
 			continue
 		}
-		nets=append(nets,net_tmp...)
+		nets=append(nets, netTmps...)
 	}
 	return nets
 }
@@ -145,12 +146,12 @@ func Load(_path string) ([]NetInterface, error) {
 	var nets []NetInterface
 	for _,block:=range blocks {
 
-		net_tmp,err:=Unmarshal(block)
+		netTmp,err:=Unmarshal(block)
 		if err!=nil {
 			log.Println(err)
 			continue
 		}
-		nets=append(nets,*net_tmp)
+		nets=append(nets,*netTmp)
 	}
 
 	return nets, nil
@@ -177,12 +178,12 @@ func Unmarshal(block0 [][]byte) (*NetInterface,error) {
 }
 func UnmarshalHead(block [][]byte) (*NetInterfaceHead,error) {
 	if len(block) !=2 {
-		return nil, errors.New("Vaild head len")
+		return nil, errors.New("Vaild head len. ")
 	}
 	var head NetInterfaceHead
 	line1:=keyValSplit(block[0])
 	if len(line1) < 2 {
-		return nil, errors.New("Vaild head split")
+		return nil, errors.New("Vaild head split. ")
 	}
 	//log.Println(line1)
 	head.LinkUp=string(line1[0])
@@ -192,7 +193,7 @@ func UnmarshalHead(block [][]byte) (*NetInterfaceHead,error) {
 
 	if len(line2) != 4 {
 		log.Println(line2)
-		return nil, errors.New("Vaild head iface")
+		return nil, errors.New("Vaild head iface. ")
 	}
 	head.Protocol=string(line2[2])
 	head.Type=string(line2[3])
@@ -217,6 +218,48 @@ func UnmarshalOptions(block [][]byte) (*NetOptions) {
 	return &options
 }
 
+func GetNetworkCard() []networkCard {
+	netIs, err := net.Interfaces()
+	if err != nil {
+		log.Printf("fail to get net interfaces: %v", err)
+		return nil
+	}
+
+	var netCards []networkCard
+	for _, netI := range netIs {
+		tmp := networkCard{}
+		if len(netI.HardwareAddr.String()) == 0 {
+			continue
+		}
+		tmp.Macaddr = netI.HardwareAddr.String()
+		if strings.Contains(netI.Name, "veth") {
+			continue
+		} else if strings.Contains(netI.Name, "docker") {
+			continue
+		} else if strings.Contains(netI.Name, "br-") {
+			continue
+		}
+		tmp.Name = netI.Name
+		byName, err := net.InterfaceByName(netI.Name)
+		if err != nil {
+			log.Println("get interface ", tmp.Name, " failed")
+		}
+		address, err := byName.Addrs()
+		for _, v := range address {
+			tmp.Ip = append(tmp.Ip, v.String())
+		}
+		netCards = append(netCards, tmp)
+	}
+	return netCards
+}
+func GetNetsSampleName() ([]string) {
+	netCards:=GetNetworkCard()
+	var netsName []string
+	for _,netCard:=range netCards {
+		netsName=append(netsName,netCard.Name)
+	}
+	return netsName
+}
 /*
 func Unmarshal(block [][]byte,v interface{}) error {
 	rv := reflect.ValueOf(v)

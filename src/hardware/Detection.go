@@ -12,7 +12,7 @@ import (
 	"syscall"
 )
 
-func Get_all() []disk.PartitionStat {
+func GetAll() []disk.PartitionStat {
 	devices, err := disk.Partitions(false)
 	var filter []disk.PartitionStat
 	if err != nil {
@@ -31,7 +31,7 @@ func Get_all() []disk.PartitionStat {
 	return filter
 }
 
-func Get_block() (*ghw.BlockInfo, error) {
+func GetBlock() (*ghw.BlockInfo, error) {
 	block, err := ghw.Block()
 	if err != nil {
 		log.Printf("get block devces fail: %s", err)

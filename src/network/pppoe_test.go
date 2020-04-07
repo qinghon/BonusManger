@@ -13,11 +13,14 @@ func TestGetFilelist2(t *testing.T) {
 func TestReadDslFile(t *testing.T) {
 	t.Log(ReadDslFile())
 }
-func TestCheckLink(t *testing.T) {
-	s:=PppoeAccount{}
-	s.Status.Iface="eth0"
-	err:=CheckLink(s,1)
-	if err != nil {
+
+
+func TestPppoeAccount_Check(t *testing.T) {
+	var pa PppoeAccount
+	pa.Name="wlp3s0"
+	out,err:=pa.Check(nil,1,7)
+	if err!=nil {
 		t.Error(err)
 	}
+	t.Log(string(out))
 }

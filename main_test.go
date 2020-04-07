@@ -13,7 +13,7 @@ func Test_read_chap_secrets(t *testing.T) {
 }
 func Test_getFilelist(t *testing.T) {
 	tmp := network.GetFilelist("/etc/ppp/peers")
-	t.Log(*tmp)
+	t.Log(tmp)
 }
 func Test_Read_dsl_file(t *testing.T) {
 	tmp := network.ReadDslFile()
