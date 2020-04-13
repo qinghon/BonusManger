@@ -29,3 +29,17 @@ func TestCopyForce(t *testing.T) {
 		t.Error(err)
 	}
 }
+func TestGetResp(t *testing.T) {
+	resp, err := GetResp(VersionURLS2, "latest")
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(string(resp))
+}
+func TestGetResp2(t *testing.T) {
+	resp, err := GetResp(VersionURLS, "v0.4.0")
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(string(resp))
+}

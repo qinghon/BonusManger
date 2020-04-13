@@ -20,6 +20,7 @@ import (
 )
 
 const VersionURLS = "https://github.com/qinghon/BonusManger/releases/download/%s/md5sum"
+const VersionURLS2 = "https://bm.zzk2.icu/%s/md5sum"
 
 const GetClient = "https://github.com/qinghon/BonusManger/releases/download/%s/bonus_manger_%s"
 const BxcNodeURL = "https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
@@ -143,29 +144,30 @@ func onboot() {
 		}
 	}
 }
-func checkVersion() (string, bool) {
+func checkVersion() (string, bool, error) {
 	var err error
 	lastReleaseData, err = getLatestInfo()
 	if err != nil {
 		log.Printf("get tag info fail:%s", err)
-		return "", false
+		return "", false, err
 	}
 	if lastReleaseData.TagName == "" {
-		log.Println("not found new tag")
-		return "", false
+		log.Info("not found new tag")
+		return "", false, nil
 	}
 	//log.Println(fmt.Sprintf(VersionURLS, lastReleaseData.TagName))
-	resp, err := http.Get(fmt.Sprintf(VersionURLS, lastReleaseData.TagName))
+
+	ret, err := GetResp(VersionURLS, lastReleaseData.TagName)
 	if err != nil {
-		log.Printf("get version failed: %s", err)
-		return "", false
+		log.Errorf("get github version fail: %s", err)
+		ret, err = GetResp(VersionURLS2, "latest")
+		if err != nil {
+			log.Errorf("get main website faild : %s", err)
+			return "", false, err
+		}
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		println("read body failed")
-	}
-	spl := strings.Split(string(body), "\n")
+
+	spl := strings.Split(ret, "\n")
 	md5sumLocal := Getfilemd5(os.Args[0])
 	for _, l := range spl {
 		if strings.TrimSpace(l) == "" {
@@ -187,23 +189,27 @@ func checkVersion() (string, bool) {
 		//log.Println(md5sum, md5sumLocal)
 		if md5sum != md5sumLocal {
 
-			return md5sum, true
+			return md5sum, true, nil
 		} else {
-			return "", false
+			return "", false, nil
 		}
 		//log.Println(md5sum,filename)
 	}
-	return "", false
+	return "", false, nil
 }
 
 func checkAndUpdate() {
-	md5sum, needUpdate := checkVersion()
+	md5sum, needUpdate, err := checkVersion()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	//log.Println(md5sum)
 	if needUpdate {
-		log.Printf("we need update to %s,new client md5sum: %s", lastReleaseData.TagName, md5sum)
+		log.Infof("we need update to %s,new client md5sum: %s", lastReleaseData.TagName, md5sum)
 		downNewClient(md5sum)
 	} else {
-		log.Println("don't need update")
+		log.Info("don't need update")
 	}
 }
 
@@ -399,4 +405,14 @@ func StartPPP() {
 }
 func runPPP(cmd *exec.Cmd) ([]byte,error) {
 	return tools.CmdStdout(cmd)
+}
+
+func GetResp(_url string, _format string) (string, error) {
+	// 原谅我发现调俩小时http.Client 还不如调用命令
+	cmd := exec.Command("curl", "-fsSL", fmt.Sprintf(_url, _format))
+	by, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(by), err
 }
