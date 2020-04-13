@@ -23,6 +23,7 @@ const VersionURLS = "https://github.com/qinghon/BonusManger/releases/download/%s
 const VersionURLS2 = "https://bm.zzk2.icu/%s/md5sum"
 
 const GetClient = "https://github.com/qinghon/BonusManger/releases/download/%s/bonus_manger_%s"
+const GetClient2 = "https://bm.zzk2.icu/%s/bonus_manger_%s"
 const BxcNodeURL = "https://github.com/BonusCloud/BonusCloud-Node/raw/master/img-modules/bxc-node_%s"
 const BxcNodeService = `
 [Unit]
@@ -219,9 +220,9 @@ func downNewClient(md5sum string) {
 	if err != nil {
 		log.Printf("Download new client fail: %s", err)
 
-		err = DownloadFile(fmt.Sprintf(GetClient, lastReleaseData.TagName, ARCH), downPath)
+		err = DownloadFile(fmt.Sprintf(GetClient2, "latest", ARCH), downPath)
 		if err != nil {
-			log.Printf("Download new client fail: %s", err)
+			log.Errorf("Download new client fail: %s", err)
 		}
 	}
 	if md5sum == "" {
