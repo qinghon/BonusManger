@@ -251,7 +251,7 @@ func ReadDslFile() []PppoeAccount {
 		configs = append(configs, *tmp)
 	}
 
-	for i:=0;i< len(configs);i++ {
+	for i := 0; i < len(configs); i++ {
 		configs[i].GetStatus()
 
 	}
@@ -270,6 +270,10 @@ func ResolveDslFile(fPath string) (*PppoeAccount, error) {
 	mtuReg, err := regexp.Compile("mtu.?(.*)")
 	userReg, err := regexp.Compile("user.?\"(.*)\"")
 	netCards := GetNetsSampleName()
+	nicNetCards := []string{}
+	for _, n := range netCards {
+		nicNetCards = append(nicNetCards, "nic-"+n)
+	}
 	for {
 		l, _, c := br.ReadLine()
 		if c == io.EOF {
@@ -284,13 +288,18 @@ func ResolveDslFile(fPath string) (*PppoeAccount, error) {
 		}
 		if strInArray(netCards, tmpS) != -1 {
 			p.Conf.Interface = tmpS
-			log.Debug("find interface set as ", tmpS)
+			log.Debugf("find interface set as %s", tmpS)
+			continue
+		}
+		if strInArray(nicNetCards, tmpS) != -1 {
+			p.Conf.Interface = tmpS
+			log.Debugf("find interface set as %s", tmpS)
 			continue
 		}
 		if strings.Contains(tmpS, "user ") {
 			sub := userReg.FindSubmatch([]byte(tmpS))
 			if len(sub) <= 1 {
-				log.Printf("not found user in %s", fPath)
+				log.Warnf("not found user in %s", fPath)
 			} else {
 				p.Username = string(sub[1])
 			}
@@ -304,6 +313,7 @@ func ResolveDslFile(fPath string) (*PppoeAccount, error) {
 				p.Conf.Mtu, err = strconv.Atoi(string(sub[1]))
 				if err != nil {
 					log.Debugf("conver mtu string to int error: %s", err)
+					p.Conf.Mtu = 1492
 				}
 			}
 			continue
@@ -548,6 +558,7 @@ func IntsallPpp() ([]byte, error) {
 	//}
 	return cmd.Output()
 }
+
 /*
 func CheckLinkAll() error {
 	pas := ReadDslFile()
@@ -561,7 +572,7 @@ func CheckLinkAll() error {
 */
 
 func (pa *PppoeAccount) RestartPPP() error {
-	log.Warnf("Reconnect ppp %s",pa.Name)
+	log.Warnf("Reconnect ppp %s", pa.Name)
 	if PPP_POOL[pa.Name] == nil {
 		pa.Connect()
 		return nil
@@ -581,7 +592,7 @@ func (pa *PppoeAccount) RestartPPP() error {
 	return cmd.Process.Signal(syscall.SIGHUP)
 }
 
-func (pa *PppoeAccount) Connect() (error) {
+func (pa *PppoeAccount) Connect() error {
 	if PPP_POOL[pa.Name] == nil {
 		goto connect
 	}
@@ -590,7 +601,7 @@ func (pa *PppoeAccount) Connect() (error) {
 		return nil
 	}
 	pa.Status.Check = false
-	connect:
+connect:
 	arg := append([]string{"nodetach"}, pa.Conf.Other...)
 	arg = append(arg, pa.Conf.Interface,
 		"user", pa.Username,
@@ -598,7 +609,7 @@ func (pa *PppoeAccount) Connect() (error) {
 		"logfile", fmt.Sprintf("/var/run/ppp-%s.log", pa.Name),
 		"ifname", pa.Name)
 
-	log.Println(strings.Join(arg, "\" \""))
+	log.Info(strings.Join(arg, "\" \""))
 	cmd := exec.Command("pppd", arg...)
 
 	//err := cmd.Start()
@@ -612,7 +623,7 @@ func (pa *PppoeAccount) Connect() (error) {
 	go pa.GoCheck()
 	return nil
 }
-func (pa *PppoeAccount) Close() (error) {
+func (pa *PppoeAccount) Close() error {
 	pa.Status.Check = false
 	cmd := PPP_POOL[pa.Name].Cmd
 	log.Println(pa.Name, cmd)
@@ -631,22 +642,21 @@ func (pa *PppoeAccount) Close() (error) {
 	return nil
 }
 
-func (pa *PppoeAccount) Remove() (error) {
+func (pa *PppoeAccount) Remove() error {
 	return os.Remove(path.Join("/etc/ppp/peers", pa.Name))
 }
-
 
 func (pa *PppoeAccount) GoCheck() {
 	time.Sleep(time.Second * 15)
 	tk := time.NewTicker(time.Second * CheckPPPInterval)
 	pa.Status.Check = true
-	reCheck:=make(chan bool,2)
+	reCheck := make(chan bool, 2)
 	//log.Debug(reCheck)
 	for {
 		select {
 		case <-tk.C:
 			_, err := pa.Check(nil, 2, 7)
-			if ! pa.Status.Check {
+			if !pa.Status.Check {
 				return
 			}
 			if err != nil {
@@ -654,7 +664,7 @@ func (pa *PppoeAccount) GoCheck() {
 				reCheck <- false
 			}
 		case <-reCheck:
-			if ! pa.Status.Check {
+			if !pa.Status.Check {
 				return
 			}
 			_, err := pa.Check(nil, 2, 7)
@@ -672,6 +682,7 @@ func (pa *PppoeAccount) GoCheck() {
 	}
 	return
 }
+
 /*
 t: type: 一个字节
 value: 11100000 http+ping+ping网关
