@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"time"
 )
+
 type StatusDetail struct {
 	Bcode       string `json:"bcode"`
 	Email       string `json:"email"`
@@ -97,56 +98,63 @@ func getPpp(c *gin.Context) {
 }
 func getPppLog(c *gin.Context) {
 	filename := c.Param("name")
-	pa:=network.PPP_POOL[filename].PA
-	pa.Name=filename
-	Blog,err:=pa.GetLog()
+	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
+	Blog, err := accConf.GetLog()
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("get log %s fail:\n%s", filename, err)})
 		return
 	}
-	c.JSON(http.StatusOK,gin.H{"result":string(Blog)})
+	c.JSON(http.StatusOK, gin.H{"result": string(Blog)})
 }
 func setPpp(c *gin.Context) {
+	var code int
+	var message Message
 	var accConf network.PppoeAccount
 	if err := c.ShouldBindJSON(&accConf); err != nil {
 		log.Printf("bind to PppoeAccount error: %s", err)
 	}
 	if accConf.Name == "" {
-		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
+		code, message = http.StatusNoContent, Message{http.StatusNoContent, "Not have name"}
+		//c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
 	} else if accConf.Username == "" || accConf.Password == "" {
 		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
 	}
+	if network.POOL_PA[accConf.Name] != nil && network.POOL_PA[accConf.Name].Status.CloseChan != nil {
+		network.POOL_PA[accConf.Name].Close()
+		network.POOL_PA[accConf.Name] = nil
+	}
 	err := network.Setppp(accConf)
 	if err != nil {
-		c.JSON(http.StatusNotImplemented,
-			Message{http.StatusNotImplemented, "Set ppp account error:" +
-				fmt.Sprintf("%s", err)})
+		code, message = http.StatusNotImplemented, Message{code,
+			fmt.Sprintf("Set ppp account error: %s", err)}
 	} else if err := accConf.Connect(); err != nil {
-		c.JSON(http.StatusOK, Message{http.StatusInternalServerError,
-			fmt.Sprintf("pppoe call fail: %s\n", err)})
+		code, message = http.StatusOK, Message{http.StatusInternalServerError,
+			fmt.Sprintf("pppoe call fail: %s\n", err)}
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, "Set " + accConf.Name + " OK "})
+		code, message = http.StatusOK, Message{http.StatusOK, "Set " + accConf.Name + " OK "}
 	}
+	ReturnMessage(c, code, message)
 }
 func delPpp(c *gin.Context) {
-	name := c.Param("name")
-	if name == "" {
+	filename := c.Param("name")
+	if filename == "" {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve json failed"})
 	}
-	acc:=network.PPP_POOL[name].PA
-	_=acc.Close()
-	if !network.PathExist("/etc/ppp/peers/" + name) {
+	// todo bug
+	accConf, _ := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
+	_ = accConf.Close()
+	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
-			fmt.Sprintf("file %s not found", name)})
+			fmt.Sprintf("file %s not found", filename)})
 	}
-	err := os.Remove("/etc/ppp/peers/" + name)
-	if err != nil {
+
+	if err := os.Remove("/etc/ppp/peers/" + filename); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
-			fmt.Sprintf("file %s remove failed", name)})
+			fmt.Sprintf("file %s remove failed", filename)})
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", name)})
+		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("remove %s OK", filename)})
 	}
 }
 func installPpp(c *gin.Context) {
@@ -166,10 +174,16 @@ func startPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	accConfClose :=network.PPP_POOL[filename].PA
-	accConfClose.Close()
+	if network.POOL_PA[filename] != nil && network.POOL_PA[filename].Status.CloseChan != nil {
+		log.Debug(network.POOL_PA[filename].Name)
+		network.POOL_PA[filename].RestartPPP()
+		return
+	}
 	//todo
-	accConf,err:=network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s",filename))
+	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
+	if accConf.Status.CloseChan != nil {
+		accConf.Close()
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("Cannot read pppoe file %s :\n%s", filename, err)})
@@ -178,7 +192,9 @@ func startPpp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("start pppoe file %s fail:\n%s", filename, err)})
 	} else {
-		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("OK",)})
+		go accConf.GoCheck()
+		network.POOL_PA[filename] = accConf
+		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("OK", )})
 	}
 }
 func stopPpp(c *gin.Context) {
@@ -190,7 +206,19 @@ func stopPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	accConf :=network.PPP_POOL[filename].PA
+	if network.POOL_PA[filename] != nil {
+		err := network.POOL_PA[filename].Close()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
+				fmt.Sprintf("stop %s fail: %s", filename, err)})
+		} else {
+			c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
+		}
+		network.POOL_PA[filename] = nil
+		return
+	}
+	// todo bug
+	accConf, _ := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
 	if err := accConf.Close(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("stop %s fail: %s", filename, err)})
@@ -202,14 +230,14 @@ func stopPpp(c *gin.Context) {
 func getNet(c *gin.Context) {
 	getname := c.Query("samplename")
 	log.Debug(getname)
-	if getname=="1" {
-		netNames :=network.GetNetsSampleName()
+	if getname == "1" {
+		netNames := network.GetNetsSampleName()
 		c.JSON(http.StatusOK, netNames)
 		return
 	}
 	by, err := ioutil.ReadFile("/etc/network/interfaces")
 	if err != nil {
-		log.Error(err,"/etc/network/interfaces")
+		log.Error(err, "/etc/network/interfaces")
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
 			fmt.Sprintf("get file content fail: %s", err)})
 		return
@@ -217,7 +245,7 @@ func getNet(c *gin.Context) {
 	cards := network.GetNetworkCard()
 	c.JSON(http.StatusOK, network.NetInterfaces{Context: string(by), NetworkCard: cards})
 }
-func setNet(c *gin.Context) {
+func hardSetNet(c *gin.Context) {
 	var by network.NetInterfaces
 	if err := c.ShouldBindJSON(&by); err != nil {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve file failed"})
@@ -255,22 +283,6 @@ func applyNet(c *gin.Context) {
 	}
 }
 
-func HandlerPPP(c *gin.Context) {
-	actionPPP:=c.Param("action")
-	var accConf network.PppoeAccount
-	if err := c.ShouldBindJSON(&accConf); err != nil {
-		log.Printf("bind to PppoeAccount error: %s", err)
-	}
-	switch actionPPP {
-	case "reconnect":
-
-	case "close":
-
-	case "update":
-	case "delete":
-
-	}
-}
 
 func update(c *gin.Context) {
 	file, err := c.FormFile("bonusmanger")
@@ -352,13 +364,13 @@ func repair(c *gin.Context) {
 	}
 }
 func bonusGetStatus(c *gin.Context) {
-	isBound:=bonus.IsBind()
-	okDns,okNet:=bonus.GetGatewayStatus()
-	macs:=bonus.GetMacAddrs()
-	if len(macs)<1 {
-		macs=[]string{""}
+	isBound := bonus.IsBind()
+	okDns, okNet := bonus.GetGatewayStatus()
+	macs := bonus.GetMacAddrs()
+	if len(macs) < 1 {
+		macs = []string{""}
 	}
-	c.JSON(http.StatusOK,gin.H{"mac":macs[0],"status":gin.H{"bound":isBound,"network":okNet,"dns":okDns}})
+	c.JSON(http.StatusOK, gin.H{"mac": macs[0], "status": gin.H{"bound": isBound, "network": okNet, "dns": okDns}})
 }
 
 func GET(url string) ([]byte, error) {
@@ -724,4 +736,8 @@ func checkPrivateIp(c *gin.Context) {
 	}
 	c.Next()
 	log.Println("yes! He maybe in private network.")
+}
+
+func ReturnMessage(c *gin.Context, code int, message interface{}) {
+	c.JSON(code, message)
 }

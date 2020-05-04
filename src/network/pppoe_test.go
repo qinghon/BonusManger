@@ -70,3 +70,15 @@ lcp-echo-failure 2
 	t.Log(pa.Conf.Interface)
 	t.Log(pa)
 }
+func TestPppConf_Export(t *testing.T) {
+	var conf PppConf
+	conf.Usepeerdns = true
+	conf.LcpEchoInterval = 5
+	conf.LcpEchoFailure = 0
+	conf.Interface = "eth0"
+	conf.Defaultroute = true
+	conf.Mtu = 1492
+
+	t.Log(conf.Export("test1", "test1"))
+
+}
