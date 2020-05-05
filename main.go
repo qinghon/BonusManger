@@ -13,7 +13,7 @@ import (
 	"os"
 )
 
-const Version = "v0.4.2"
+const Version = "v0.4.3"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -34,6 +34,7 @@ var logLevel int
 var debug bool
 var NoSetOptions bool
 
+var config Config
 func main() {
 	Init()
 	go onboot()
@@ -111,6 +112,8 @@ func main() {
 		tool.GET("/shutdown", checkPrivateIp, shutdown)
 		tool.POST("/ssh", checkPrivateIp, openssh)
 		tool.GET("/ws", checkPrivateIp, WsSsh)
+		tool.GET("/remarks", getRemarks)
+		tool.POST("/remarks", setRemarks)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
@@ -139,11 +142,15 @@ func Init() {
 	// Output to stdout instead of the default stderr
 	// Can be any io.Writer, see below for File example
 	logrus.SetOutput(os.Stdout)
+	logrus.SetLevel(logrus.Level(logLevel))
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 		return
 	}
-	logrus.SetLevel(logrus.Level(logLevel))
+	err := config.get()
+	if err != nil {
+		logrus.Error(err)
+	}
 }
 
 /*// transparent 透传至官方客户端

@@ -613,6 +613,8 @@ func umountPart(c *gin.Context) {
 }
 
 */
+
+// tools
 func shutdown(c *gin.Context) {
 	if err := tools.Shutdown(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
@@ -725,6 +727,29 @@ func WsSsh(c *gin.Context) {
 	<-quitChan
 
 	log.Println("websocket finished")
+}
+
+func setRemarks(c *gin.Context) {
+	var s Config
+	if err := c.ShouldBindJSON(&s); err != nil {
+		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, fmt.Sprintf("resolve config failed: %s", err)})
+		return
+	}
+	log.Debug(s)
+	config.Remarks = s.Remarks
+	err := config.save()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, fmt.Sprintf("%s", err)})
+	}
+	c.JSON(http.StatusOK, Message{http.StatusOK, s.Remarks})
+}
+func getRemarks(c *gin.Context) {
+	err := config.get()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError, fmt.Sprintf("%s", err)})
+		return
+	}
+	c.JSON(http.StatusOK, config)
 }
 
 func checkPrivateIp(c *gin.Context) {

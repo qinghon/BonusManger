@@ -11,6 +11,7 @@ require (
 	github.com/qinghon/system/tools v0.0.0
 	github.com/sirupsen/logrus v1.5.0
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
+	gopkg.in/yaml.v2 v2.2.2
 )
 
 replace (

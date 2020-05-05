@@ -48,18 +48,6 @@ iface %s %s %s\n`
 	return nil
 }
 
-func LoadAll() []NetInterface {
-	files := GetFilelist("/etc/network/interfaces.d")
-	var nets []NetInterface
-	for _, file := range files {
-		netTmps, err := Load(file)
-		if err != nil {
-			continue
-		}
-		nets = append(nets, netTmps...)
-	}
-	return nets
-}
 func Load(_path string) ([]NetInterface, error) {
 	by, err := ioutil.ReadFile(_path)
 	if err != nil {

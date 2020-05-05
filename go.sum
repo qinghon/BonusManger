@@ -42,6 +42,8 @@ github.com/qinghon/debinterface v0.0.3 h1:BGTg1dl3jnQdoG5P5j3HVWXfZqSIPdkBGUCNXH
 github.com/qinghon/debinterface v0.0.3/go.mod h1:KxHX6lOGbGx/gAA5Zro9GREpAGpFY/8KCBlH8HTZj/Y=
 github.com/qinghon/debinterface v0.0.4 h1:dkL5oII3YxDQHR3zHkB7/Xq0PVtfET/5SWKC69wPJzo=
 github.com/qinghon/debinterface v0.0.4/go.mod h1:KxHX6lOGbGx/gAA5Zro9GREpAGpFY/8KCBlH8HTZj/Y=
+github.com/qinghon/debinterface v0.0.5 h1:oV1zX6PrwrjshTm44vKtFkN1GVElK2NTlWuLpFpmEX0=
+github.com/qinghon/debinterface v0.0.5/go.mod h1:KxHX6lOGbGx/gAA5Zro9GREpAGpFY/8KCBlH8HTZj/Y=
 github.com/sirupsen/logrus v1.5.0 h1:1N5EYkVAPEywqZRJd7cwnRtCb6xJx7NH3T3WUTF980Q=
 github.com/sirupsen/logrus v1.5.0/go.mod h1:+F7Ogzej0PZc/94MaYx/nvG9jOFMD2osvC3s+Squfpo=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
