@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# This script is called with the following arguments:
+#    Arg  Name                          Example
+#    $1   Interface name                ppp0
+#    $2   The tty                       ttyS1
+#    $3   The link speed                38400
+#    $4   Local IP number               12.34.56.78
+#    $5   Peer  IP number               12.34.56.99
+#    $6   Optional ``ipparam'' value    foo
+
+PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
+
+
+PPP_IFACE="$1"
+PPP_TTY="$2"
+PPP_SPEED="$3"
+PPP_LOCAL="$4"
+PPP_REMOTE="$5"
+PPP_IPPARAM="$6"
+# "OR" check
+_PING=$_PING #set _PING=223.5.5.5,8.8.8.8
+_HTTP=$_HTTP #set _HTTP=baidu.com  
+
+export PPP_IFACE PPP_TTY PPP_SPEED PPP_LOCAL PPP_REMOTE PPP_IPPARAM 
+
+# //todo 1 why kill -1 ppp.pid pppd exite
+# //todo 2 why ping second ip fail
+(
+# sleep 25
+[[ -f "/var/run/ppp-check-$CALL_FILE.pid" ]] &&exit 0
+env >>"/var/run/ppp-check-$CALL_FILE.log"
+pingcount=$(echo "$_PING"|awk -F, '{print NF}')
+httpcount=$(echo "$_HTTP"|awk -F, '{print NF}')
+while :; do
+    sleep 10
+    echo "$$" > "/var/run/ppp-check-$CALL_FILE.pid"
+    echo "pid $$" >> "/var/run/ppp-check-$CALL_FILE.log"
+    echo "$_PING $_HTTP" >> "/var/run/ppp-check-$CALL_FILE.log"
+    if [[ -z "$_PING" ]]&&[[  -z "$_HTTP" ]]; then
+        exit 0
+    fi
+    if [[ -n "$_PING" ]]; then
+        count=0
+        for addr in $(echo "$_PING"|awk -F, '{for (i = 0; ++i <= NF;) print $i}'); do
+            if ! ping -w 3 -I "$PPP_IFACE" "$addr" >>/var/run/ppp-check-$CALL_FILE.log 2>&1 ; then
+                count=$((count+1))
+            fi
+        done
+        if [[ $count -ge $pingcount ]]; then
+            kill -1 "$PPPD_PID"
+            rm "/var/run/ppp-check-$CALL_FILE.pid"
+            exit 1
+        fi
+    fi
+    if [[ -n "$_HTTP" ]]; then
+        count=0
+        for addr in $(echo "$_HTTP"|awk -F, '{for (i = 0; ++i <= NF;) print $i}'); do
+            if ! curl  -fs "$addr" >>/var/run/ppp-check-$CALL_FILE.log 2>&1 ; then
+                count=$((count+1))
+            fi
+        done
+        if [[ $count -ge $httpcount ]]; then
+            kill -1 "$PPPD_PID" 
+            rm "/var/run/ppp-check-$CALL_FILE.pid"
+            exit 1
+        fi
+    fi
+done) &

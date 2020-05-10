@@ -1,0 +1,15 @@
+#!/bin/sh
+
+
+# set metric=600 
+METRIC="$metric"
+if [ -z "$METRIC" ]; then
+    exit 0
+fi
+if [ -n "$METRIC" ]; then
+    [ ! -f  "/var/run/ppp-defaultroute" ] && exit 0
+    if [ "$METRIC" -eq 0 ]; then
+        ip route add $(cat /var/run/ppp-defaultroute)
+    fi
+fi
+rm -vf /var/run/ppp-defaultroute

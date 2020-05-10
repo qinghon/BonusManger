@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# set metric=600 
+
+METRIC="$metric"
+if [ -z "$METRIC" ]; then
+    exit 0
+fi
+if [ -n "$METRIC" ]; then
+    if [ $METRIC -eq 0 ]; then
+        ip r |grep default|head -n 1 > "/var/run/ppp-defaultroute"
+        ip route del $(ip r |head -n 1)
+    fi
+    ip route add default via "$5" dev "$1" proto static metric "$METRIC"
+fi
