@@ -38,8 +38,7 @@ type PppStatus struct {
 	Iface     string    `json:"iface"`
 	IP        []string  `json:"ip"`
 	Enable    bool      `json:"enable"`
-	Check     bool      `json:"-"`
-	CloseChan chan bool `json:"-"`
+	//Check     bool      `json:"-"`
 }
 type PppoeAccount struct {
 	Name     string    `json:"name"`
@@ -78,9 +77,9 @@ type CheckConf struct {
 	Type     uint8    `yaml:"type"`
 }
 
-var POOL_PA map[string]*PppoeAccount
+//var POOL_PA map[string]*PppoeAccount
 
-var CHAN_PA chan *PppoeAccount
+//var CHAN_PA chan *PppoeAccount
 
 const CheckPPPInterval = 10
 
@@ -234,12 +233,7 @@ func Setppp(p PppoeAccount) error {
 	if err := p.SetAutoStart(); err != nil {
 		return err
 	}
-	if CHAN_PA == nil {
-		CHAN_PA = make(chan *PppoeAccount, 2)
-	}
-	POOL_PA[p.Name] = &p
-	CHAN_PA <- &p
-	return nil
+	return p.RestartPPP()
 }
 
 /*
@@ -597,15 +591,13 @@ func (pa *PppoeAccount) RestartPPP() error {
 	if err != nil {
 		log.Error(err)
 	}
-	time.Sleep(time.Second * CheckPPPInterval)
+	time.Sleep(time.Second * 3)
 	err = pa.Connect()
-	go pa.GoCheck()
 	return err
 }
 
 func (pa *PppoeAccount) Connect() error {
 
-	pa.Status.Check = false
 	by, err := IfUp(pa.Name)
 	if err != nil {
 		return err
@@ -615,18 +607,11 @@ func (pa *PppoeAccount) Connect() error {
 	return nil
 }
 func (pa *PppoeAccount) Close() error {
-	pa.Status.Check = false
 	log.Warnf("Close: %s", pa.Name)
 	by, err := IfDown(pa.Name)
 	if err != nil {
 		log.Error(string(by))
 	}
-	if pa.Status.CloseChan == nil {
-		pa.Status.CloseChan = make(chan bool)
-	}
-
-	pa.Status.CloseChan <- false
-
 	return err
 }
 
@@ -641,8 +626,8 @@ func (pa *PppoeAccount) Remove() error {
 
 	return os.Remove(path.Join("/etc/ppp/peers", pa.Name))
 }
-
-func (pa *PppoeAccount) GoCheck() {
+// delete
+/*func (pa *PppoeAccount) GoCheck() {
 	time.Sleep(time.Second * CheckPPPInterval * 2)
 	tk := time.NewTicker(time.Second * CheckPPPInterval)
 	reCheck := make(chan bool, 2)
@@ -677,7 +662,7 @@ func (pa *PppoeAccount) GoCheck() {
 	}
 	log.Infof("exitd check %s", pa.Name)
 	return
-}
+}*/
 
 /*
 t: type: 一个字节

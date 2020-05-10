@@ -121,10 +121,7 @@ func setPpp(c *gin.Context) {
 	} else if accConf.Username == "" || accConf.Password == "" {
 		c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
 	}
-	if network.POOL_PA[accConf.Name] != nil && network.POOL_PA[accConf.Name].Status.CloseChan != nil {
-		network.POOL_PA[accConf.Name].Close()
-		network.POOL_PA[accConf.Name] = nil
-	}
+
 	err := network.Setppp(accConf)
 	if err != nil {
 		code, message = http.StatusNotImplemented, Message{code,
@@ -142,15 +139,13 @@ func delPpp(c *gin.Context) {
 	if filename == "" {
 		c.JSON(http.StatusBadRequest, Message{http.StatusBadRequest, "resolve json failed"})
 	}
-	// todo bug
-	accConf, _ := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
-	_ = accConf.Close()
-	if !network.PathExist("/etc/ppp/peers/" + filename) {
-		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
-			fmt.Sprintf("file %s not found", filename)})
-	}
 
-	if err := os.Remove("/etc/ppp/peers/" + filename); err != nil {
+	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
+	if err!=nil {
+		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
+			fmt.Sprintf("%s", err)})
+	}
+	if err := accConf.Remove(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("file %s remove failed", filename)})
 	} else {
@@ -174,26 +169,17 @@ func startPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	if network.POOL_PA[filename] != nil && network.POOL_PA[filename].Status.CloseChan != nil {
-		log.Debug(network.POOL_PA[filename].Name)
-		network.POOL_PA[filename].RestartPPP()
-		return
-	}
 	//todo
 	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
-	if accConf.Status.CloseChan != nil {
-		accConf.Close()
-	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("Cannot read pppoe file %s :\n%s", filename, err)})
 	}
-	if err := accConf.Connect(); err != nil {
+	if err := accConf.RestartPPP(); err != nil {
 		c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
 			fmt.Sprintf("start pppoe file %s fail:\n%s", filename, err)})
 	} else {
-		go accConf.GoCheck()
-		network.POOL_PA[filename] = accConf
 		c.JSON(http.StatusOK, Message{http.StatusOK, fmt.Sprintf("OK", )})
 	}
 }
@@ -206,17 +192,7 @@ func stopPpp(c *gin.Context) {
 	if !network.PathExist("/etc/ppp/peers/" + filename) {
 		c.JSON(http.StatusNotFound, Message{http.StatusNotFound, "file name not found"})
 	}
-	if network.POOL_PA[filename] != nil {
-		err := network.POOL_PA[filename].Close()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, Message{http.StatusInternalServerError,
-				fmt.Sprintf("stop %s fail: %s", filename, err)})
-		} else {
-			c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
-		}
-		network.POOL_PA[filename] = nil
-		return
-	}
+
 	// todo bug
 	accConf, _ := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
 	if err := accConf.Close(); err != nil {
