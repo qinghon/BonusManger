@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-const Version = "v0.4.3"
+const Version = "v0.4.4"
 
 type Message struct {
 	Code    int    `json:"code"`

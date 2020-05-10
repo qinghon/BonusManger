@@ -379,24 +379,6 @@ func getLatestInfo() (releaseLatest, error) {
 	return release, nil
 
 }
-func StartPPPoeCheck() {
-	acc := network.ReadDslFile()
-	network.POOL_PA = map[string]*network.PppoeAccount{}
-	for i, p := range acc {
-		log.Debug(p.Name)
-		go acc[i].GoCheck()
-		network.POOL_PA[acc[i].Name] = &acc[i]
-	}
-	for {
-		select {
-		case pa := <-network.CHAN_PA:
-			pa.RestartPPP()
-			go pa.GoCheck()
-		}
-	}
-	var wait = make(chan byte, 1)
-	<-wait
-}
 
 func GetResp(_url string, _format string) (string, error) {
 	// 原谅我发现调俩小时http.Client 还不如调用命令

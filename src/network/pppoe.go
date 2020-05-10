@@ -31,6 +31,8 @@ type PppConf struct {
 	LcpEchoInterval int      `json:"lcp-echo-interval"`
 	Usepeerdns      bool     `json:"usepeerdns"`
 	Nameservers     []string `json:"nameservers"`
+	PingAddr		[]string `json:"ping_addr"`
+	HttpAddr		[]string `json:"http_addr"`
 	Other           []string `json:"other"`
 }
 type PppStatus struct {
@@ -70,18 +72,6 @@ type papSecret struct {
 	Option   string
 }
 
-// Save to config file
-type CheckConf struct {
-	Interval int      `yaml:"interval"`
-	Address  []string `yaml:"address"`
-	Type     uint8    `yaml:"type"`
-}
-
-//var POOL_PA map[string]*PppoeAccount
-
-//var CHAN_PA chan *PppoeAccount
-
-const CheckPPPInterval = 10
 
 func (pppconf *PppConf) Export(name, user string) string {
 	var conf string
@@ -103,6 +93,12 @@ func (pppconf *PppConf) Export(name, user string) string {
 	}
 	if pppconf.Defaultroute {
 		conf += fmt.Sprintf("set metric=%d\n", pppconf.Metric)
+	}
+	if pppconf.HttpAddr!=nil ||len(pppconf.HttpAddr)!=0{
+		conf+=fmt.Sprintf("set _HTTP=%s\n",strings.Join(pppconf.HttpAddr,","))
+	}
+	if pppconf.PingAddr!=nil ||len(pppconf.PingAddr)!=0{
+		conf+=fmt.Sprintf("set _PING=%s\n",strings.Join(pppconf.HttpAddr,","))
 	}
 	conf += fmt.Sprintf("lcp-echo-failure %d\n", pppconf.LcpEchoFailure)
 	conf += fmt.Sprintf("lcp-echo-interval %d\n", pppconf.LcpEchoInterval)
@@ -190,17 +186,22 @@ func (pppconf *PppConf) Parse(fPath string) error {
 			setline := strings.Split(sline[1], "=")
 			switch setline[0] {
 			case "metric":
-				n, err := strconv.Atoi(sline[1])
+				n, err := strconv.Atoi(setline[1])
 				if err != nil {
 					pppconf.Other = append(pppconf.Other, tmpS)
 					continue
 				}
 				pppconf.Defaultroute = true
 				pppconf.Metric = n
+			case "_HTTP":
+				pppconf.PingAddr=strings.Split(setline[1],",")
+			case "_PING":
+				pppconf.HttpAddr=strings.Split(setline[1],",")
 			default:
 				pppconf.Other = append(pppconf.Other, tmpS)
 			}
-		case "persist", "noauth", "hide-password", "noipdefault", "defaultroute":
+		case "persist", "noauth", "hide-password", "noipdefault", "defaultroute",
+			"modem","plugin","maxfail","logfile":
 			continue
 		default:
 			pppconf.Other = append(pppconf.Other, tmpS)
@@ -626,43 +627,6 @@ func (pa *PppoeAccount) Remove() error {
 
 	return os.Remove(path.Join("/etc/ppp/peers", pa.Name))
 }
-// delete
-/*func (pa *PppoeAccount) GoCheck() {
-	time.Sleep(time.Second * CheckPPPInterval * 2)
-	tk := time.NewTicker(time.Second * CheckPPPInterval)
-	reCheck := make(chan bool, 2)
-	pa.GetStatus()
-	if !pa.Status.Enable {
-		return
-	}
-	//log.Debug(reCheck)
-	for {
-		select {
-		case <-pa.Status.CloseChan:
-			pa.Status.CloseChan = nil
-			return
-		case <-tk.C:
-			_, err := pa.Check(nil, 2, 7)
-
-			if err != nil {
-				log.Debugf("first check fail: %s ;%s", err, pa.Name)
-				reCheck <- true
-			}
-		case <-reCheck:
-			_, err := pa.Check(nil, 2, 7)
-			if err != nil {
-				log.Debugf("second check fail: %s; %v; %s", err, pa.Status.Check, pa.Name)
-				pa.RestartPPP()
-
-			}
-		case <-time.After(time.Second * CheckPPPInterval * 2):
-			break
-			log.Debug("Check pppoe timeout")
-		}
-	}
-	log.Infof("exitd check %s", pa.Name)
-	return
-}*/
 
 /*
 t: type: 一个字节

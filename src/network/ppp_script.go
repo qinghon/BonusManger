@@ -72,13 +72,13 @@ export PPP_IFACE PPP_TTY PPP_SPEED PPP_LOCAL PPP_REMOTE PPP_IPPARAM
 # //todo 1 why kill -1 ppp.pid pppd exite
 # //todo 2 why ping second ip fail
 (
-# sleep 25
+sleep 25
 [[ -f "/var/run/ppp-check-$CALL_FILE.pid" ]] &&exit 0
 env >>"/var/run/ppp-check-$CALL_FILE.log"
 pingcount=$(echo "$_PING"|awk -F, '{print NF}')
 httpcount=$(echo "$_HTTP"|awk -F, '{print NF}')
 while :; do
-    sleep 10
+    sleep 30
     echo "$$" > "/var/run/ppp-check-$CALL_FILE.pid"
     echo "pid $$" >> "/var/run/ppp-check-$CALL_FILE.log"
     echo "$_PING $_HTTP" >> "/var/run/ppp-check-$CALL_FILE.log"
