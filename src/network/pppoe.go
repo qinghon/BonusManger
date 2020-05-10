@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/qinghon/debinterface"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -13,25 +14,32 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
 type PppConf struct {
-	Interface string `json:"interface"`
-	Mtu       int    `json:"mtu"`
-	//Linkname string `json:"linkname"`
-	Other []string `json:"other"`
+	User            string   `json:"user"`
+	Interface       string   `json:"interface"`
+	Mtu             int      `json:"mtu"`
+	Metric          int      `json:"metric"`
+	Linkname        string   `json:"linkname"`
+	Ifname          string   `json:"ifname"`
+	Defaultroute    bool     `json:"defaultroute"`
+	LcpEchoFailure  int      `json:"lcp-echo-failure"`
+	LcpEchoInterval int      `json:"lcp-echo-interval"`
+	Usepeerdns      bool     `json:"usepeerdns"`
+	Nameservers     []string `json:"nameservers"`
+	Other           []string `json:"other"`
 }
 type PppStatus struct {
-	Pid    int      `json:"pid"`
-	Iface  string   `json:"iface"`
-	IP     []string `json:"ip"`
-	Enable bool     `json:"enable"`
-	Check  bool     `json:"-"`
+	Pid       int       `json:"pid"`
+	Iface     string    `json:"iface"`
+	IP        []string  `json:"ip"`
+	Enable    bool      `json:"enable"`
+	Check     bool      `json:"-"`
+	CloseChan chan bool `json:"-"`
 }
 type PppoeAccount struct {
 	Name     string    `json:"name"`
@@ -69,30 +77,138 @@ type CheckConf struct {
 	Address  []string `yaml:"address"`
 	Type     uint8    `yaml:"type"`
 }
-type StatusStack struct {
-	Cmd *exec.Cmd
-	PA  PppoeAccount
-}
 
-var PPP_POOL map[string]*StatusStack
-var CMD_CHAN chan *exec.Cmd
+var POOL_PA map[string]*PppoeAccount
 
-const installPppScript = `
-#!/bin/sh
-if which pppd >/dev/null ; then
-    exit 0
-fi
-if which apk >/dev/null ; then
-    apk add ppp-pppoe
-elif which apt >/dev/null ; then
-    apt update
-    apt install -y pppoe
-elif which yum ; then
-    yum install -y ppp
-fi
-`
+var CHAN_PA chan *PppoeAccount
 
 const CheckPPPInterval = 10
+
+func (pppconf *PppConf) Export(name, user string) string {
+	var conf string
+	if user != "" {
+		conf += fmt.Sprintf("user \"%s\"\n", user)
+	} else if pppconf.User != "" {
+		conf += fmt.Sprintf("user \"%s\"\n", pppconf.User)
+	}
+	if pppconf.Mtu != 0 {
+		conf += fmt.Sprintf("mtu %d\n", pppconf.Mtu)
+	}
+	if pppconf.Linkname != "" {
+		conf += fmt.Sprintf("linkname %s\n", pppconf.Linkname)
+	} else {
+		conf += fmt.Sprintf("linkname %s\n", name)
+	}
+	if pppconf.Ifname != "" {
+		conf += fmt.Sprintf("ifname %s\n", name)
+	}
+	if pppconf.Defaultroute {
+		conf += fmt.Sprintf("set metric=%d\n", pppconf.Metric)
+	}
+	conf += fmt.Sprintf("lcp-echo-failure %d\n", pppconf.LcpEchoFailure)
+	conf += fmt.Sprintf("lcp-echo-interval %d\n", pppconf.LcpEchoInterval)
+	if pppconf.Usepeerdns {
+		conf += "usepeerdns\n"
+	}
+	if pppconf.Interface != "" {
+		conf += fmt.Sprintf("%s\n", pppconf.Interface)
+	}
+	if len(pppconf.Other) != 0 {
+		conf += strings.Join(pppconf.Other, "\n")
+	}
+	conf += fmt.Sprintf("\nlogfile /var/run/ppp-%s.log\n", name)
+	return conf
+}
+func (pppconf *PppConf) Parse(fPath string) error {
+	fd, err := os.Open(fPath)
+	if err != nil {
+		log.Printf("open %s failed,error :%s", fPath, err)
+		return err
+	}
+
+	defer fd.Close()
+	br := bufio.NewReader(fd)
+
+	netCards := GetNetsSampleName()
+	var nicNetCards []string
+	for _, n := range netCards {
+		nicNetCards = append(nicNetCards, "nic-"+n)
+	}
+	for {
+		l, _, c := br.ReadLine()
+		if c == io.EOF {
+			break
+		}
+		tmpS := strings.TrimSpace(string(l))
+		if len(tmpS) == 0 {
+			continue
+		}
+		if []byte(tmpS)[:1][0] == []byte("#")[0] {
+			continue
+		}
+		if strInArray(netCards, tmpS) != -1 {
+			pppconf.Interface = tmpS
+			log.Debugf("find interface set as %s", tmpS)
+			continue
+		}
+		if strInArray(nicNetCards, tmpS) != -1 {
+			pppconf.Interface = tmpS
+			log.Debugf("find interface set as %s", tmpS)
+			continue
+		}
+		sline := strings.Fields(tmpS)
+		if len(sline) <= 0 {
+			continue
+		}
+		switch sline[0] {
+		case "user":
+			pppconf.User = strings.ReplaceAll(sline[1], "\"", "")
+			//p.Username=p.Conf.User
+		case "lcp-echo-interval":
+			n, err := strconv.Atoi(sline[1])
+			if err != nil {
+				pppconf.Other = append(pppconf.Other, tmpS)
+			}
+			pppconf.LcpEchoInterval = n
+		case "lcp-echo-failure":
+			n, err := strconv.Atoi(sline[1])
+			if err != nil {
+				pppconf.Other = append(pppconf.Other, tmpS)
+			}
+			pppconf.LcpEchoFailure = n
+		case "mtu":
+			n, err := strconv.Atoi(sline[1])
+			if err != nil {
+				pppconf.Other = append(pppconf.Other, tmpS)
+				continue
+			}
+			pppconf.Mtu = n
+		case "linkname":
+			pppconf.Linkname = sline[1]
+		case "ifname":
+			pppconf.Ifname = sline[1]
+		case "set":
+			setline := strings.Split(sline[1], "=")
+			switch setline[0] {
+			case "metric":
+				n, err := strconv.Atoi(sline[1])
+				if err != nil {
+					pppconf.Other = append(pppconf.Other, tmpS)
+					continue
+				}
+				pppconf.Defaultroute = true
+				pppconf.Metric = n
+			default:
+				pppconf.Other = append(pppconf.Other, tmpS)
+			}
+		case "persist", "noauth", "hide-password", "noipdefault", "defaultroute":
+			continue
+		default:
+			pppconf.Other = append(pppconf.Other, tmpS)
+		}
+	}
+	return nil
+}
 
 func Setppp(p PppoeAccount) error {
 
@@ -102,13 +218,8 @@ func Setppp(p PppoeAccount) error {
 		return err
 	}
 	defer fs.Close()
-	confStr := strings.Join(p.Conf.Other, "\n")
-	confStr += fmt.Sprintf("\nuser \"%s\"", p.Username)
-	confStr += fmt.Sprintf("\n%s", p.Conf.Interface)
-	if p.Conf.Mtu != 0 {
-		confStr += fmt.Sprintf("\nmtu %d ", p.Conf.Mtu)
-	}
-	confStr += "\n"
+	confStr := p.Conf.Export(p.Name, p.Username)
+
 	//log.Print(confStr)
 	_, err = fs.WriteString(confStr)
 	if err != nil {
@@ -120,6 +231,14 @@ func Setppp(p PppoeAccount) error {
 	if err := SetSecrets(p, "/etc/ppp/pap-secrets"); err != nil {
 		return err
 	}
+	if err := p.SetAutoStart(); err != nil {
+		return err
+	}
+	if CHAN_PA == nil {
+		CHAN_PA = make(chan *PppoeAccount, 2)
+	}
+	POOL_PA[p.Name] = &p
+	CHAN_PA <- &p
 	return nil
 }
 
@@ -165,74 +284,6 @@ provider %s
 	// name : dsl file name //todo 删除interfaces文件中的自启动拨号
 
 }*/
-/*func RunPpp(p PppoeAccount) ([]byte, error) {
-
-	cmd := exec.Command("pppd", "nodetach", p.Name)
-	//err := cmd.Start()
-	//if err != nil {
-	//	return nil, err
-	//}
-	return cmd.Output()
-}*/
-
-/*func KillPpp(name string) error {
-	return tools.RunCommand(fmt.Sprintf("kill -TERM `cat /var/run/ppp-%s.pid|head -n 1`", name))
-}*/
-/*
-func getPppStatus(p PppoeAccount) PppoeAccount {
-	pid_file := fmt.Sprintf("/var/run/ppp-%s.pid", p.Name)
-	if !PathExist(pid_file) {
-		log.Warn("not found pid file: %s", pid_file)
-
-		p.Status = PppStatus{0, "", nil, true}
-		return p
-	}
-	content, err := ioutil.ReadFile(pid_file)
-	if err != nil {
-		log.Error("read pid file %s fail: %s", pid_file, err)
-		p.Status = PppStatus{0, "", nil, true}
-		return p
-	}
-	spl := strings.Split(string(content), "\n")
-	log.Debug(spl)
-	if len(spl) == 1 && spl[0] != "" {
-		i, err := strconv.Atoi(spl[0])
-		if err != nil {
-			log.Println(err)
-			i = 0
-		}
-		p.Status = PppStatus{i, "", nil, true}
-		return p
-	} else if len(spl) > 1 {
-		i, err := strconv.Atoi(spl[0])
-		if err != nil {
-			i = 0
-		}
-		p.Status.Pid = i
-		p.Status.Iface = spl[1]
-		iface, err := net.InterfaceByName(spl[1])
-		if err != nil {
-			log.Println(err)
-			p.Status.IP = nil
-			return p
-		}
-		adds, err := iface.Addrs()
-		if err != nil {
-			log.Println(err)
-			p.Status.IP = nil
-			return p
-		}
-		for _, a := range adds {
-			p.Status.IP = append(p.Status.IP, a.String())
-			return p
-		}
-	} else {
-		p.Status = PppStatus{0, "", nil, true}
-		return p
-	}
-	return p
-}
-*/
 
 func ReadDslFile() []PppoeAccount {
 
@@ -251,77 +302,48 @@ func ReadDslFile() []PppoeAccount {
 		configs = append(configs, *tmp)
 	}
 
-	for i:=0;i< len(configs);i++ {
+	for i := 0; i < len(configs); i++ {
 		configs[i].GetStatus()
-
 	}
+
 	return configs
 }
+func GetFilelist(path string) []string {
+	var files []string
+	err := filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
+		if f == nil {
+			return err
+		}
+		if f.IsDir() {
+			return nil
+		}
+		//println(path)
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		log.Printf("filepath.Walk() returned %v\n", err)
+	}
+	return files
+}
+
 func ResolveDslFile(fPath string) (*PppoeAccount, error) {
 	var p PppoeAccount
-	fd, err := os.Open(fPath)
+	p.Name = filepath.Base(fPath)
+	var pppconf PppConf
+	err := pppconf.Parse(fPath)
 	if err != nil {
-		log.Printf("open %s failed,error :%s", fPath, err)
 		return nil, err
 	}
-	p.Name = filepath.Base(fPath)
-	defer fd.Close()
-	br := bufio.NewReader(fd)
-	mtuReg, err := regexp.Compile("mtu.?(.*)")
-	userReg, err := regexp.Compile("user.?\"(.*)\"")
-	netCards := GetNetsSampleName()
-	for {
-		l, _, c := br.ReadLine()
-		if c == io.EOF {
-			break
-		}
-		tmpS := strings.TrimSpace(string(l))
-		if len(tmpS) == 0 {
-			continue
-		}
-		if []byte(tmpS)[:1][0] == []byte("#")[0] {
-			continue
-		}
-		if strInArray(netCards, tmpS) != -1 {
-			p.Conf.Interface = tmpS
-			log.Debug("find interface set as ", tmpS)
-			continue
-		}
-		if strings.Contains(tmpS, "user ") {
-			sub := userReg.FindSubmatch([]byte(tmpS))
-			if len(sub) <= 1 {
-				log.Printf("not found user in %s", fPath)
-			} else {
-				p.Username = string(sub[1])
-			}
-			continue
-		}
-		if strings.Contains(tmpS, "mtu") {
-			sub := mtuReg.FindSubmatch([]byte(tmpS))
-			if len(sub) <= 1 {
-				log.Debugf("not found mtu in %s", fPath)
-			} else {
-				p.Conf.Mtu, err = strconv.Atoi(string(sub[1]))
-				if err != nil {
-					log.Debugf("conver mtu string to int error: %s", err)
-				}
-			}
-			continue
-		}
-		if strings.Contains(tmpS, " ") {
-			sub := strings.Split(tmpS, " ")
-			p.Conf.Other = append(p.Conf.Other, sub...)
-			continue
-		}
-		p.Conf.Other = append(p.Conf.Other, tmpS)
-	}
+	log.Debug(pppconf)
+	p.Username = pppconf.User
+	p.Conf = pppconf
 	pd, err := getDslPassword(p.Username)
 	if err == nil {
 		p.Password = pd
 	}
 	return &p, nil
 }
-
 func getDslPassword(username string) (string, error) {
 	chapSecrets, err := ResolveChapSecrets()
 	papSecrets, err := ResolvePapSecrets()
@@ -381,6 +403,7 @@ func ResolveChapSecrets() ([]chapSecret, error) {
 	}
 	return chapSecrets, nil
 }
+
 func ResolvePapSecrets() ([]papSecret, error) {
 	fc, err := os.Open("/etc/ppp/pap-secrets")
 	if err != nil {
@@ -420,24 +443,6 @@ func ResolvePapSecrets() ([]papSecret, error) {
 	return papSecrets, nil
 }
 
-func GetFilelist(path string) []string {
-	var files []string
-	err := filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
-		if f == nil {
-			return err
-		}
-		if f.IsDir() {
-			return nil
-		}
-		//println(path)
-		files = append(files, path)
-		return nil
-	})
-	if err != nil {
-		log.Printf("filepath.Walk() returned %v\n", err)
-	}
-	return files
-}
 func ReadChapSecrets(acc []PppoeAccount) []PppoeAccount {
 	fc, err := os.Open("/etc/ppp/chap-secrets")
 	if err != nil {
@@ -474,7 +479,6 @@ func ReadChapSecrets(acc []PppoeAccount) []PppoeAccount {
 	}
 	return acc
 }
-
 func SetSecrets(p PppoeAccount, filename string) error {
 	//filename:="/etc/ppp/chap-secrets"
 	if !PathExist(filename) {
@@ -497,14 +501,14 @@ func SetSecrets(p PppoeAccount, filename string) error {
 	if bytes.Contains(fstr, []byte(p.Username)) {
 		lines := strings.Split(string(fstr), "\n")
 		for i, line := range lines {
-			if strings.Contains(line, p.Username) {
+			if strings.Contains(line, "\""+p.Username+"\"") {
 				lines[i] = fmt.Sprintf("\"%s\" * \"%s\" ", p.Username, p.Password)
 			}
 		}
 		fstr = []byte(strings.Join(lines, "\n"))
 		log.Println("found ", p.Username)
 	} else {
-		log.Println("not found ", p.Username)
+		log.Info("not found ", p.Username)
 		//log.Println(fmt.Sprintf("\n\"%s\" * \"%s\" ",p.Username,p.Password))
 		fstr = append(fstr, []byte(fmt.Sprintf("\n\"%s\" * \"%s\"\n", p.Username, p.Password))...)
 	}
@@ -548,130 +552,133 @@ func IntsallPpp() ([]byte, error) {
 	//}
 	return cmd.Output()
 }
-/*
-func CheckLinkAll() error {
-	pas := ReadDslFile()
-	for _, pa := range pas {
-		log.Infof("Start pppoe check progress:%s", pa.Name)
-		go pa.GoCheck()
 
+func (pa *PppoeAccount) SetAutoStart() error {
+
+	adp := debinterface.NewAdapter(pa.Name, "inet", "ppp")
+	adp.SetAuto(true)
+	adp.SetProvider(pa.Name)
+
+	if len(pa.Conf.Nameservers) != 0 {
+		var ipList []net.IP
+		for i := 0; i < len(pa.Conf.Nameservers); i++ {
+			ipList = append(ipList, net.ParseIP(pa.Conf.Nameservers[i]))
+		}
+		adp.SetDnsNameServer(ipList)
+	}
+	var faces debinterface.Interfaces
+	faces.FilePath = "/etc/network/interfaces"
+	err := faces.Add(adp)
+	if err != nil {
+		return err
 	}
 	return nil
 }
-*/
+func (pa *PppoeAccount) UnSetAuto() error {
+	adp := debinterface.Interface{}
+	adp.SetName(pa.Name)
+	//adp.SetAddrFam("inet")
+	//adp.SetAuto(true)
+	//adp.SetAddrSource("ppp")
+	//adp.SetProvider(pa.Name)
+
+	faces := debinterface.Interfaces{}
+	faces.FilePath = "/etc/network/interfaces"
+
+	if err := faces.Del(adp); err != nil {
+		return err
+	}
+	return nil
+}
 
 func (pa *PppoeAccount) RestartPPP() error {
-	log.Warnf("Reconnect ppp %s",pa.Name)
-	if PPP_POOL[pa.Name] == nil {
-		pa.Connect()
-		return nil
+	log.Warnf("Reconnect ppp %s", pa.Name)
+	err := pa.Close()
+	if err != nil {
+		log.Error(err)
 	}
-	cmd := PPP_POOL[pa.Name].Cmd
-
-	if cmd == nil {
-		pa.Connect()
-		return nil
-	}
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		log.Debugf("pppd call %s exited,try to start", pa.Name)
-		PPP_POOL[pa.Name].Cmd = nil
-		pa.Connect()
-		return nil
-	}
-	return cmd.Process.Signal(syscall.SIGHUP)
-}
-
-func (pa *PppoeAccount) Connect() (error) {
-	if PPP_POOL[pa.Name] == nil {
-		goto connect
-	}
-	if PPP_POOL[pa.Name].Cmd != nil {
-		log.Warnf("%s connected", pa.Name)
-		return nil
-	}
-	pa.Status.Check = false
-	connect:
-	arg := append([]string{"nodetach"}, pa.Conf.Other...)
-	arg = append(arg, pa.Conf.Interface,
-		"user", pa.Username,
-		"password", pa.Password,
-		"logfile", fmt.Sprintf("/var/run/ppp-%s.log", pa.Name),
-		"ifname", pa.Name)
-
-	log.Println(strings.Join(arg, "\" \""))
-	cmd := exec.Command("pppd", arg...)
-
-	//err := cmd.Start()
-	//if err != nil {
-	//	return err
-	//}
-	PPP_POOL[pa.Name] = &StatusStack{cmd, *pa}
-	CMD_CHAN <- cmd
-	pa.Status.Check = true
-	log.Println(fmt.Sprintf("%s starting", pa.Name))
+	time.Sleep(time.Second * CheckPPPInterval)
+	err = pa.Connect()
 	go pa.GoCheck()
-	return nil
-}
-func (pa *PppoeAccount) Close() (error) {
-	pa.Status.Check = false
-	cmd := PPP_POOL[pa.Name].Cmd
-	log.Println(pa.Name, cmd)
-	if cmd == nil {
-		return nil
-	}
-	if cmd.Process != nil {
-		err := cmd.Process.Signal(syscall.SIGTERM)
-		if err != nil {
-			log.Error(err)
-			PPP_POOL[pa.Name].Cmd = nil
-			return err
-		}
-	}
-	PPP_POOL[pa.Name].Cmd = nil
-	return nil
+	return err
 }
 
-func (pa *PppoeAccount) Remove() (error) {
+func (pa *PppoeAccount) Connect() error {
+
+	pa.Status.Check = false
+	by, err := IfUp(pa.Name)
+	if err != nil {
+		return err
+		log.Error(string(by))
+	}
+	log.Println(fmt.Sprintf("%s starting", pa.Name))
+	return nil
+}
+func (pa *PppoeAccount) Close() error {
+	pa.Status.Check = false
+	log.Warnf("Close: %s", pa.Name)
+	by, err := IfDown(pa.Name)
+	if err != nil {
+		log.Error(string(by))
+	}
+	if pa.Status.CloseChan == nil {
+		pa.Status.CloseChan = make(chan bool)
+	}
+
+	pa.Status.CloseChan <- false
+
+	return err
+}
+
+func (pa *PppoeAccount) Remove() error {
+
+	if err := pa.Close(); err != nil {
+		log.Error(err)
+	}
+	if err := pa.UnSetAuto(); err != nil {
+		log.Error(err)
+	}
+
 	return os.Remove(path.Join("/etc/ppp/peers", pa.Name))
 }
 
-
 func (pa *PppoeAccount) GoCheck() {
-	time.Sleep(time.Second * 15)
+	time.Sleep(time.Second * CheckPPPInterval * 2)
 	tk := time.NewTicker(time.Second * CheckPPPInterval)
-	pa.Status.Check = true
-	reCheck:=make(chan bool,2)
+	reCheck := make(chan bool, 2)
+	pa.GetStatus()
+	if !pa.Status.Enable {
+		return
+	}
 	//log.Debug(reCheck)
 	for {
 		select {
+		case <-pa.Status.CloseChan:
+			pa.Status.CloseChan = nil
+			return
 		case <-tk.C:
 			_, err := pa.Check(nil, 2, 7)
-			if ! pa.Status.Check {
-				return
-			}
+
 			if err != nil {
-				log.Debug(err)
-				reCheck <- false
+				log.Debugf("first check fail: %s ;%s", err, pa.Name)
+				reCheck <- true
 			}
 		case <-reCheck:
-			if ! pa.Status.Check {
-				return
-			}
 			_, err := pa.Check(nil, 2, 7)
 			if err != nil {
-				log.Debug(pa.Status.Check)
-				go pa.RestartPPP()
+				log.Debugf("second check fail: %s; %v; %s", err, pa.Status.Check, pa.Name)
+				pa.RestartPPP()
+
 			}
 		case <-time.After(time.Second * CheckPPPInterval * 2):
+			break
 			log.Debug("Check pppoe timeout")
 		}
-		if pa.Status.Check == false {
-			return
-		}
-		log.Debug("for loop for this!")
 	}
+	log.Infof("exitd check %s", pa.Name)
 	return
 }
+
 /*
 t: type: 一个字节
 value: 11100000 http+ping+ping网关
@@ -679,8 +686,13 @@ value: 11100000 http+ping+ping网关
 */
 func (pa *PppoeAccount) Check(address []string, num int, t uint8) ([]byte, error) {
 
-	log.Debugf("Status Check Type: %d", t)
+	log.Debugf("Status Check Type: %d ,%s", t, pa.Name)
 
+	if pa.Status.Iface == "" {
+		pa.GetStatus()
+		return nil, errors.New("iface not up")
+	}
+	intf := pa.Status.Iface
 	if address == nil || len(address) == 0 {
 		address = []string{"8.8.8.8", "223.5.5.5"}
 		log.Debugf("Address: %s", address)
@@ -689,8 +701,8 @@ func (pa *PppoeAccount) Check(address []string, num int, t uint8) ([]byte, error
 	var output []byte
 	var errNum int
 	for _, addres := range address {
-		cmd := exec.Command("ping", addres, "-I", pa.Name, "-w", strconv.Itoa(num))
-		log.Debug("ping", addres, "-I", pa.Name, "-w", strconv.Itoa(num))
+		cmd := exec.Command("ping", addres, "-I", intf, "-w", strconv.Itoa(num))
+		log.Debug("ping", " ", addres, " ", "-I", " ", intf, " ", "-w", " ", strconv.Itoa(num), " # ", pa.Name)
 		tmpOutput, err := cmd.Output()
 		if err != nil {
 			log.Debug(string(tmpOutput), err)
@@ -710,41 +722,99 @@ func (pa *PppoeAccount) Check(address []string, num int, t uint8) ([]byte, error
 	}
 }
 func (pa *PppoeAccount) GetStatus() {
-	//enable status
-	ok, err := regexp.MatchString(".+?bak", pa.Name)
-	if !ok || err != nil {
-		pa.Status.Enable = false
-	}
-	if PPP_POOL[pa.Name] == nil {
-		return
-	}
-	cmd := PPP_POOL[pa.Name].Cmd
-	if cmd == nil {
-		pa.Status.Pid = 0
-		return
-	}
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		pa.Status.Pid = 0
-	}
-	log.Debug(cmd)
-	pa.Status.Pid = cmd.Process.Pid
 	netI, err := net.InterfaceByName(pa.Name)
 	if err != nil {
 		pa.Status.Iface = ""
+		log.Debugf("not found ifname interface: %s", pa.Name)
+
 	} else {
 		pa.Status.Iface = netI.Name
+		ips, err := netI.Addrs()
+		if err != nil {
+			goto getenable
+		}
+		for _, ip := range ips {
+			pa.Status.IP = append(pa.Status.IP, ip.String())
+		}
 	}
 	//todo: 获取进程状态
+
+	if pa.Conf.Linkname != "" {
+		log.Debug(pa.Conf.Linkname)
+		pidFile := fmt.Sprintf("/var/run/ppp-%s.pid", pa.Name)
+		if PathExist(pidFile) {
+			by, err := ioutil.ReadFile(pidFile)
+			if err != nil {
+				log.Error(err)
+				goto getenable
+			}
+			sline := strings.Split(string(by), "\n")
+			switch len(sline) {
+			case 1:
+				s2ip, err := strconv.Atoi(strings.TrimSpace(sline[0]))
+				if err == nil {
+					pa.Status.Pid = s2ip
+				}
+			case 2, 3:
+				s2ip, err := strconv.Atoi(strings.TrimSpace(sline[0]))
+				if err == nil {
+					pa.Status.Pid = s2ip
+				}
+				pa.Status.Iface = strings.TrimSpace(sline[1])
+			}
+			log.Debug(sline, len(sline), pa.Status)
+		} else {
+			log.Warnf("%s file not found.", pidFile)
+		}
+	}
+	//pa.Status.Pid = cmd.Process.Pid
+	//log.Debug(cmd)
+
+	//enable status
+getenable:
+	reader := debinterface.NewReader(debinterface.INTERFACES_FILE)
+	// todo filepath.Glob bug
+	if err := reader.Read(); err != nil {
+		log.Error(err)
+		return
+	}
+	for _, i := range reader.Adapters {
+		if i.GetName() == pa.Name && pa.Username != "" && pa.Password != "" {
+			pa.Status.Enable = true
+		}
+	}
+	log.Debugf("get %s enable status. %t", pa.Name, pa.Status.Enable)
 }
 func (pa *PppoeAccount) GetLog() ([]byte, error) {
 	if !PathExist(fmt.Sprintf("/var/run/ppp-%s.log", pa.Name)) {
 		return nil, os.ErrNotExist
 	}
-	return ioutil.ReadFile(fmt.Sprintf("/var/run/ppp-%s.log", pa.Name))
+	filename := fmt.Sprintf("/var/run/ppp-%s.log", pa.Name)
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if fi.Size() > 1024*512 {
+		f.Seek(-1024*512, 2)
+	}
+	by, err := ioutil.ReadAll(f)
+	return by, err
 }
 func (pa *PppoeAccount) CleanLog() {
 	_ = ioutil.WriteFile(fmt.Sprintf("/var/run/ppp-%s.log", pa.Name), nil, 0644)
 }
+
+func IfUp(name string) ([]byte, error) {
+	cmd := exec.Command("ifup", name, "-v")
+	return cmd.Output()
+}
+func IfDown(name string) ([]byte, error) {
+	cmd := exec.Command("ifdown", name, "-v")
+	return cmd.Output()
+}
+
 func PathExist(_path string) bool {
 	_, err := os.Stat(_path)
 	if err != nil && os.IsNotExist(err) {

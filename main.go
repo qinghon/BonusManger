@@ -13,7 +13,7 @@ import (
 	"os"
 )
 
-const Version = "v0.4.0"
+const Version = "v0.4.3"
 
 type Message struct {
 	Code    int    `json:"code"`
@@ -32,24 +32,17 @@ var DonInsNode bool
 var DonUpdate bool
 var logLevel int
 var debug bool
+var NoSetOptions bool
 
+var config Config
 func main() {
 	Init()
 	go onboot()
 
+
 	e := gin.Default()
 	config := cors.DefaultConfig()
-	if debug {
-		config.AllowAllOrigins = true
-	} else {
-		config.AllowOrigins = []string{
-			"https://console.bonuscloud.io",
-			"https://bm.zzk2.icu",
-			"http://bm.zzk2.icu",
-			"http://localhost:8080",
-			"http://127.0.0.1:8080",
-			"https://127.0.0.1:8080"}
-	}
+	config.AllowAllOrigins = true
 	e.Use(cors.New(config))
 	e.GET("/discovery", tpAll)
 	e.GET("/status", tpAll)
@@ -98,14 +91,14 @@ func main() {
 	e.GET("/pppoe/:name/log", getPppLog)
 	e.GET("/net", getNet)
 	e.PATCH("/net", applyNet)
-	e.PUT("/net", setNet)
-	netApi := e.Group("/net", )
-	{
-		netApi.GET("/eth")
-		netApi.POST("/eth")
-		netApi.GET("/ppp")
-		netApi.POST("/ppp")
-	}
+	e.PUT("/net", hardSetNet)
+	//netApi := e.Group("/net", )
+	//{
+	//	netApi.GET("/eth")
+	//	netApi.POST("/eth")
+	//	netApi.GET("/ppp")
+	//	netApi.POST("/ppp")
+	//}
 	b := e.Group("/bonus")
 	{
 		b.POST("/repair", repair)
@@ -119,6 +112,8 @@ func main() {
 		tool.GET("/shutdown", checkPrivateIp, shutdown)
 		tool.POST("/ssh", checkPrivateIp, openssh)
 		tool.GET("/ws", checkPrivateIp, WsSsh)
+		tool.GET("/remarks", getRemarks)
+		tool.POST("/remarks", setRemarks)
 	}
 	e.GET("/v", getVersion)
 	e.Run(":9018")
@@ -129,7 +124,7 @@ func Init() {
 	flag.BoolVar(&DonUpdate, "U", false, "Don check update. ")
 	flag.IntVar(&logLevel, "level", 4, "Show log level. ")
 	flag.BoolVar(&debug, "debug", false, "Debug mode. ")
-	var v = flag.Bool("V", false, "show version. ")
+	var v = flag.Bool("no-set-options", false, "no set ppp options file: /etc/ppp/options .")
 	flag.Parse()
 	if *v {
 		showVersion()
@@ -147,11 +142,15 @@ func Init() {
 	// Output to stdout instead of the default stderr
 	// Can be any io.Writer, see below for File example
 	logrus.SetOutput(os.Stdout)
+	logrus.SetLevel(logrus.Level(logLevel))
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 		return
 	}
-	logrus.SetLevel(logrus.Level(logLevel))
+	err := config.get()
+	if err != nil {
+		logrus.Error(err)
+	}
 }
 
 /*// transparent 透传至官方客户端

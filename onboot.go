@@ -120,10 +120,19 @@ type releaseLatest struct {
 
 func onboot() {
 	go setArch()
-	if err:=network.PatchStopPpp();err != nil {
-		log.Error(err)
+	// set /etc/ppp/options file default options
+	if !NoSetOptions {
+		err := network.SetDefaultOptions()
+		if err != nil {
+			log.Error(err)
+		}
+		err = network.SetMetricScript()
+		if err != nil {
+			log.Error(err)
+		}
 	}
-	go StartPPP()
+	go network.SetAllAuto()
+	go StartPPPoeCheck()
 	if !DonInsNode {
 		go checkNode()
 	} else {
@@ -224,6 +233,9 @@ func downNewClient(md5sum string) {
 		if err != nil {
 			log.Errorf("Download new client fail: %s", err)
 		}
+	}
+	if err != nil {
+		return
 	}
 	if md5sum == "" {
 		err = CopyForce(os.Args[0], downPath)
@@ -330,12 +342,12 @@ func CopyForce(dstName, srcName string) error {
 	srcFile, _ := os.Open(srcName)
 	dstFile, err := os.OpenFile(dstName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return err
 	}
-	_, err = io.Copy(srcFile, dstFile)
+	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 	}
 	defer srcFile.Close()
 	defer dstFile.Close()
@@ -371,41 +383,23 @@ func getLatestInfo() (releaseLatest, error) {
 	return release, nil
 
 }
-func StartPPP() {
-	network.PPP_POOL=make(map[string]*network.StatusStack)
-	network.CMD_CHAN=make(chan *exec.Cmd,5)
-	pas:=network.ReadDslFile()
-	go func() {
-		var cmd *exec.Cmd
-		for {
-			select {
-			case cmd = <-network.CMD_CHAN:
-				log.Debug("get chan cmd")
-				go runPPP(cmd)
-				log.Debug("cmd started!")
-			}
-		}
-		log.Debug("exited select")
-	}()
-	for _,pa:=range pas {
-
-		err:=pa.Connect()
-		if err != nil {
-			log.Println(err)
-		}
-
+func StartPPPoeCheck() {
+	acc := network.ReadDslFile()
+	network.POOL_PA = map[string]*network.PppoeAccount{}
+	for i, p := range acc {
+		log.Debug(p.Name)
+		go acc[i].GoCheck()
+		network.POOL_PA[acc[i].Name] = &acc[i]
 	}
-	//time.Sleep(time.Second*5)
-	//go network.CheckLinkAll()
-	//pppd "nodetach" "noipdefault" "defaultroute" "hide-password" "noauth" "persist" "plugin" "rp-pppoe.so" "maxfail" "0" user test1 password 123456 "lcp-echo-failure" "4" "lcp-echo-interval" "30" "linkname" "test1" "eth0"  logfile /var/run/pppd.log
-	var wait chan int
+	for {
+		select {
+		case pa := <-network.CHAN_PA:
+			pa.RestartPPP()
+			go pa.GoCheck()
+		}
+	}
+	var wait = make(chan byte, 1)
 	<-wait
-	log.Debug("Useful debugging information.")
-	log.Debug("all pppd exited!")
-
-}
-func runPPP(cmd *exec.Cmd) ([]byte,error) {
-	return tools.CmdStdout(cmd)
 }
 
 func GetResp(_url string, _format string) (string, error) {

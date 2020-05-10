@@ -24,7 +24,10 @@ func TestDownloadFileWget(t *testing.T) {
 func TestCopyForce(t *testing.T) {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	t.Log(os.Args[0])
+	t.Log(Getfilemd5(os.Args[0]), Getfilemd5("build/bonus_manger_x86_64"))
 	err:= CopyForce(os.Args[0],"build/bonus_manger_x86_64")
+	t.Log(Getfilemd5(os.Args[0]), Getfilemd5("build/bonus_manger_x86_64"))
+
 	if err != nil {
 		t.Error(err)
 	}

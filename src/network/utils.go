@@ -1,7 +1,6 @@
 package network
 
 import (
-	"github.com/qinghon/system/tools"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"strings"
@@ -39,38 +38,4 @@ func IpIsPrivate(ip string) bool {
 		}
 	}
 	return isPrivate
-}
-
-func PatchPpp() error {
-	// 添加自动检测通不通的参数 lcp-echo-interval 和lcp-echo-failure
-	patchShell:=`
-		#!/bin/bash
-		cd /etc/ppp/peers
-		config=(
-		    "lcp-echo-interval 30"
-		    "lcp-echo-failure 2"
-		)
-		for f in $(ls); do
-		    for c in "${!config[@]}"; do
-		        echo "${config[$c]}" 
-		        if ! grep -q "^$(echo ${config[$c]}|awk '{print $1}')" $f ; then
-		            echo "${config[$c]}" >>$f
-		        fi
-		    done
-		    echo "pacthed ppp config $f"
-		done
-	`
-
-	return tools.RunCommand(patchShell)
-}
-
-func PatchStopPpp() error {
-	// 只能删除单个拨号的脚本
-	stopAndDelAuto:=`#!/bin/bash
-		test -f /opt/BonusManger/patchstopppp &&exit 0
-		cat /etc/network/interfaces|grep 'bonusmanger' -B 2|head -n 1|awk '{print "ifdown",$2}'|bash -x
-		sed -i  '/bonusmanger/,+1d;:go;1,2!{P;$!N;D};N;bgo' /etc/network/interfaces
-		touch /opt/BonusManger/patchstopppp
-`
-	return tools.RunCommand(stopAndDelAuto)
 }
