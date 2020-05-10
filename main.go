@@ -6,10 +6,10 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"os"
 	"path"
 	"runtime"
 	"strings"
-	"os"
 )
 
 const Version = "v0.4.4"
@@ -34,10 +34,10 @@ var debug bool
 var NoSetOptions bool
 
 var config Config
+
 func main() {
 	Init()
 	go onboot()
-
 
 	e := gin.Default()
 	config := cors.DefaultConfig()

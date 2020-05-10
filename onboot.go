@@ -144,9 +144,9 @@ func onboot() {
 		select {
 		case <-timetkm.C:
 			go checkAndUpdate()
-		//case <-timetkp.C:
-		//	network.CLOSE_TK<-false
-		//	go network.CheckLinkAll()
+			//case <-timetkp.C:
+			//	network.CLOSE_TK<-false
+			//	go network.CheckLinkAll()
 		}
 	}
 }

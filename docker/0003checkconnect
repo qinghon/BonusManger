@@ -7,7 +7,7 @@
 #    $3   The link speed                38400
 #    $4   Local IP number               12.34.56.78
 #    $5   Peer  IP number               12.34.56.99
-#    $6   Optional ``ipparam'' value    foo
+#    $6   Optional ''ipparam'' value    foo
 
 PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
 

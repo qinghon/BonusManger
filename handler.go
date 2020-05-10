@@ -141,7 +141,7 @@ func delPpp(c *gin.Context) {
 	}
 
 	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
-	if err!=nil {
+	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
 			fmt.Sprintf("%s", err)})
 	}
@@ -258,7 +258,6 @@ func applyNet(c *gin.Context) {
 		c.JSON(http.StatusOK, Message{http.StatusOK, "OK"})
 	}
 }
-
 
 func update(c *gin.Context) {
 	file, err := c.FormFile("bonusmanger")

@@ -31,16 +31,15 @@ type PppConf struct {
 	LcpEchoInterval int      `json:"lcp-echo-interval"`
 	Usepeerdns      bool     `json:"usepeerdns"`
 	Nameservers     []string `json:"nameservers"`
-	PingAddr		[]string `json:"ping_addr"`
-	HttpAddr		[]string `json:"http_addr"`
+	PingAddr        []string `json:"ping_addr"`
+	HttpAddr        []string `json:"http_addr"`
 	Other           []string `json:"other"`
 }
 type PppStatus struct {
-	Pid       int       `json:"pid"`
-	Iface     string    `json:"iface"`
-	IP        []string  `json:"ip"`
-	Enable    bool      `json:"enable"`
-	//Check     bool      `json:"-"`
+	Pid    int      `json:"pid"`
+	Iface  string   `json:"iface"`
+	IP     []string `json:"ip"`
+	Enable bool     `json:"enable"`
 }
 type PppoeAccount struct {
 	Name     string    `json:"name"`
@@ -72,7 +71,6 @@ type papSecret struct {
 	Option   string
 }
 
-
 func (pppconf *PppConf) Export(name, user string) string {
 	var conf string
 	if user != "" {
@@ -94,11 +92,11 @@ func (pppconf *PppConf) Export(name, user string) string {
 	if pppconf.Defaultroute {
 		conf += fmt.Sprintf("set metric=%d\n", pppconf.Metric)
 	}
-	if pppconf.HttpAddr!=nil ||len(pppconf.HttpAddr)!=0{
-		conf+=fmt.Sprintf("set _HTTP=%s\n",strings.Join(pppconf.HttpAddr,","))
+	if pppconf.HttpAddr != nil || len(pppconf.HttpAddr) != 0 {
+		conf += fmt.Sprintf("set _HTTP=%s\n", strings.Join(pppconf.HttpAddr, ","))
 	}
-	if pppconf.PingAddr!=nil ||len(pppconf.PingAddr)!=0{
-		conf+=fmt.Sprintf("set _PING=%s\n",strings.Join(pppconf.HttpAddr,","))
+	if pppconf.PingAddr != nil || len(pppconf.PingAddr) != 0 {
+		conf += fmt.Sprintf("set _PING=%s\n", strings.Join(pppconf.HttpAddr, ","))
 	}
 	conf += fmt.Sprintf("lcp-echo-failure %d\n", pppconf.LcpEchoFailure)
 	conf += fmt.Sprintf("lcp-echo-interval %d\n", pppconf.LcpEchoInterval)
@@ -194,14 +192,14 @@ func (pppconf *PppConf) Parse(fPath string) error {
 				pppconf.Defaultroute = true
 				pppconf.Metric = n
 			case "_HTTP":
-				pppconf.PingAddr=strings.Split(setline[1],",")
+				pppconf.PingAddr = strings.Split(setline[1], ",")
 			case "_PING":
-				pppconf.HttpAddr=strings.Split(setline[1],",")
+				pppconf.HttpAddr = strings.Split(setline[1], ",")
 			default:
 				pppconf.Other = append(pppconf.Other, tmpS)
 			}
 		case "persist", "noauth", "hide-password", "noipdefault", "defaultroute",
-			"modem","plugin","maxfail","logfile":
+			"modem", "plugin", "maxfail", "logfile":
 			continue
 		default:
 			pppconf.Other = append(pppconf.Other, tmpS)

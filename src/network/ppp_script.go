@@ -12,7 +12,6 @@ const F0003checkconnect = "/etc/ppp/ip-up.d/0003checkconnect"
 const F0002restoreroute = "/etc/ppp/ip-down.d/0002restoreroute"
 const F0003closecheck = "/etc/ppp/ip-down.d/0003closecheck"
 
-
 const installPppScript = `
 #!/bin/sh
 if which pppd >/dev/null ; then
@@ -197,7 +196,7 @@ func SetAllAuto() error {
 func SetAllScript() error {
 	var err error
 	if PathExist("/etc/ppp/ip-up.d/0001setmetric") {
-		_=os.Remove("/etc/ppp/ip-up.d/0001setmetric")
+		_ = os.Remove("/etc/ppp/ip-up.d/0001setmetric")
 	}
 	err = setFile(F0002replacedefaultroute, replacedefaultroute)
 	err = setFile(F0002restoreroute, restoreroute)
