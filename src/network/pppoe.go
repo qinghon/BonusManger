@@ -96,7 +96,7 @@ func (pppconf *PppConf) Export(name, user string) string {
 		conf += fmt.Sprintf("set _HTTP=%s\n", strings.Join(pppconf.HttpAddr, ","))
 	}
 	if pppconf.PingAddr != nil || len(pppconf.PingAddr) != 0 {
-		conf += fmt.Sprintf("set _PING=%s\n", strings.Join(pppconf.HttpAddr, ","))
+		conf += fmt.Sprintf("set _PING=%s\n", strings.Join(pppconf.PingAddr, ","))
 	}
 	conf += fmt.Sprintf("lcp-echo-failure %d\n", pppconf.LcpEchoFailure)
 	conf += fmt.Sprintf("lcp-echo-interval %d\n", pppconf.LcpEchoInterval)
@@ -192,12 +192,14 @@ func (pppconf *PppConf) Parse(fPath string) error {
 				pppconf.Defaultroute = true
 				pppconf.Metric = n
 			case "_HTTP":
-				pppconf.PingAddr = strings.Split(setline[1], ",")
-			case "_PING":
 				pppconf.HttpAddr = strings.Split(setline[1], ",")
+			case "_PING":
+				pppconf.PingAddr = strings.Split(setline[1], ",")
 			default:
 				pppconf.Other = append(pppconf.Other, tmpS)
 			}
+		case "usepeerdns":
+			pppconf.Usepeerdns = true
 		case "persist", "noauth", "hide-password", "noipdefault", "defaultroute",
 			"modem", "plugin", "maxfail", "logfile":
 			continue

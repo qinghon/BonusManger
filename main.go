@@ -88,6 +88,7 @@ func main() {
 	e.PATCH("/pppoe/:name", startPpp)
 	e.PATCH("/pppoe/:name/stop", stopPpp)
 	e.GET("/pppoe/:name/log", getPppLog)
+	e.DELETE("/pppoe/:name/log", delPppLog)
 	e.GET("/net", getNet)
 	e.PATCH("/net", applyNet)
 	e.PUT("/net", hardSetNet)

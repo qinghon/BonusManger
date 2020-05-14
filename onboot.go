@@ -122,10 +122,12 @@ func onboot() {
 	go setArch()
 	// set /etc/ppp/options file default options
 	if !NoSetOptions {
-		err := network.SetAllScript()
-		if err != nil {
-			log.Error(err)
-		}
+		go func() {
+			err := network.SetAllScript()
+			if err != nil {
+				log.Error(err)
+			}
+		}()
 	}
 	go network.SetAllAuto()
 	//go StartPPPoeCheck()

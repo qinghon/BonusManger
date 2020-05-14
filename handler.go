@@ -108,6 +108,17 @@ func getPppLog(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"result": string(Blog)})
 }
+func delPppLog(c *gin.Context) {
+	filename := c.Param("name")
+	accConf, err := network.ResolveDslFile(fmt.Sprintf("/etc/ppp/peers/%s", filename))
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, Message{http.StatusServiceUnavailable,
+			fmt.Sprintf("%s", err)})
+	}
+	accConf.CleanLog()
+
+	c.JSON(http.StatusOK, Message{200, "OK"})
+}
 func setPpp(c *gin.Context) {
 	var code int
 	var message Message
@@ -115,6 +126,7 @@ func setPpp(c *gin.Context) {
 	if err := c.ShouldBindJSON(&accConf); err != nil {
 		log.Printf("bind to PppoeAccount error: %s", err)
 	}
+	log.Debug(accConf)
 	if accConf.Name == "" {
 		code, message = http.StatusNoContent, Message{http.StatusNoContent, "Not have name"}
 		//c.JSON(http.StatusNoContent, Message{http.StatusNoContent, "Not have name"})
