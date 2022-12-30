@@ -4,14 +4,13 @@ go 1.13
 
 require (
 	github.com/gin-contrib/cors v1.3.0
-	github.com/gin-gonic/gin v1.4.0
+	github.com/gin-gonic/gin v1.7.0
 	github.com/gorilla/websocket v1.4.1
 	github.com/qinghon/network v0.0.0
 	github.com/qinghon/system/bonus v0.0.0
 	github.com/qinghon/system/tools v0.0.0
 	github.com/sirupsen/logrus v1.5.0
-	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.2.8
 )
 
 replace (
